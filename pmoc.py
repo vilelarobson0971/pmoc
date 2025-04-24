@@ -1,70 +1,104 @@
-# [Código anterior permanece igual até a função generate_pdf_report]
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
+import pytz
+from fpdf import FPDF
+import tempfile
+import os
 
-def generate_pdf_report(data, title="Relatório de Aparelhos"):
-    pdf = FPDF(orientation='L')  # Landscape orientation
-    pdf.add_page()
-    pdf.set_font("Arial", size=9)  # Reduzi o tamanho base da fonte para 9
-    
-    # Ajuste do fuso horário
-    tz = pytz.timezone('America/Sao_Paulo')
-    now = datetime.now(tz)
-    
-    # Header with company name
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, txt="PMOC - Plano de Manutenção, Operação e Controle - AKR Brands", ln=1, align='C')
-    pdf.ln(5)
-    
-    # Report title
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, txt=title, ln=1, align='C')
-    pdf.ln(5)
-    
-    # Date and time - COM FUSO HORÁRIO CORRIGIDO
-    pdf.set_font("Arial", 'I', 9)
-    pdf.cell(0, 10, txt=f"Gerado em: {now.strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
-    pdf.ln(8)
-    
-    # Table header - AJUSTEI AS LARGURAS DAS COLUNAS
-    pdf.set_font("Arial", 'B', 9)
-    col_widths = [10, 18, 32, 22, 30, 10, 25, 25, 22, 22]  # Aumentei as colunas de datas
-    headers = ["TAG", "Local", "Setor", "Marca", "Modelo", "BTU", "Última Manut.", 
-               "Próx. Manut.", "Técnico", "Aprovação"]
-    
-    # Header row
-    for i, header in enumerate(headers):
-        pdf.cell(col_widths[i], 8, txt=header, border=1, align='C')  # Reduzi a altura
-    pdf.ln()
-    
-    # Table content - COM FONTE MENOR
-    pdf.set_font("Arial", size=8)  # Fonte menor para o conteúdo
-    for _, row in data.iterrows():
-        # Handle NaN/None values
-        tag = str(row['TAG']) if pd.notna(row['TAG']) else ''
-        local = str(row['Local']) if pd.notna(row['Local']) else ''
-        setor = str(row['Setor']) if pd.notna(row['Setor']) else ''
-        marca = str(row['Marca']) if pd.notna(row['Marca']) else ''
-        modelo = str(row['Modelo']) if pd.notna(row['Modelo']) else ''
-        btu = str(row['BTU']) if pd.notna(row['BTU']) else ''
-        
-        # Formata datas para garantir que caberão
-        data_manut = str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) else ''
-        prox_manut = str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) else ''
-        
-        tecnico = str(row['Técnico Executante'])[:15] if pd.notna(row['Técnico Executante']) else ''  # Limita tamanho
-        aprovacao = str(row['Aprovação Supervisor'])[:15] if pd.notna(row['Aprovação Supervisor']) else ''
-        
-        pdf.cell(col_widths[0], 6, txt=tag, border=1, align='C')  # Altura reduzida
-        pdf.cell(col_widths[1], 6, txt=local, border=1)
-        pdf.cell(col_widths[2], 6, txt=setor, border=1)
-        pdf.cell(col_widths[3], 6, txt=marca, border=1)
-        pdf.cell(col_widths[4], 6, txt=modelo, border=1)
-        pdf.cell(col_widths[5], 6, txt=btu, border=1, align='C')
-        pdf.cell(col_widths[6], 6, txt=data_manut, border=1, align='C')
-        pdf.cell(col_widths[7], 6, txt=prox_manut, border=1, align='C')
-        pdf.cell(col_widths[8], 6, txt=tecnico, border=1)
-        pdf.cell(col_widths[9], 6, txt=aprovacao, border=1)
-        pdf.ln()
+# Configuração da página
+def setup_page():
+    st.set_page_config(
+        page_title="PMOC - Plano de Manutenção, Operação e Controle - AKR Brands",
+        page_icon="❄️",
+        layout="wide"
+    )
 
-    # [Restante da função permanece igual...]
+# Inicialização dos dados
+def init_data():
+    if 'data' not in st.session_state:
+        initial_data = {
+            'TAG': list(range(1, 42)),
+            'Local': ['Matriz']*20 + ['Filial']*13 + ['Matriz']*8,
+            'Setor': ['Recepção', 'CPD', 'CPD', 'RH', 'Marketing', 'Marketing', 'Inteligência de mercado',
+                     'Antigo Show Room', 'Diretoria - Rafael', 'Controladoria', 'Diretoria - Jair',
+                     'Sala reunião térreo', 'Financeiro', 'Diretoria', 'Sala reunião principal',
+                     'Sala reunião principal', 'Expedição - Recepção', 'Expedição - Sala Welder',
+                     'Corte - Risco', 'Estoque - Sala Umberto', 'Laboratório - Sala ADM',
+                     'Laboratório - Sala ADM', 'Gerência', 'Modelagem', 'Inteligência do Produto',
+                     'Estilo', 'Show Room', 'T.I.', 'PCP', 'PCP', 'Compras', 'Refeitório', 'Refeitório',
+                     'Refeitório', 'Sala de Reunião', 'Estúdio', 'Estúdio', 'Refeitório', 'Refeitório',
+                     'Sala Expedição Kids', 'Ecommerce'],
+            'Marca': ['Springer', 'Philco', 'Elgin', 'Springer', 'TCL', 'TCL', 'TCL', 'Springer',
+                    'Springer', 'Springer', 'COMFEE', 'COMFEE', 'Springer', 'Springer', 'Springer',
+                    'Springer', 'Philco', 'Agratto', 'COMFEE', 'GREE', 'GREE', 'GREE', 'GREE', 'GREE',
+                    'GREE', 'GREE', 'GREE', 'Consul', 'Electrolux', 'GREE', 'Philco', 'GREE', 'GREE',
+                    'GREE', 'GREE', 'Philco', 'Springer', 'Agratto', 'Agratto', '', ''],
+            'Modelo': ['42MACA12S5', 'Eco Inverter', 'HWFL18B2IA', '42MACB18S5', 'TAC18CSA1', 'TAC18CSA1',
+                      'TAC18CSA1', '42MACB18S5', '42AFFCL12', '42MACB18S5', '42AFCE12X5', '42AFCD18F5',
+                      '42MACB18S5', '42TFCA', '42MACB18S5', '42MACB18S5', 'Eco Inverter', 'ACST12FR4-02',
+                      '42AFCD12F5', 'GWC12QC-D3NNB4D/I', 'GWC18AAD-D3NNA1D/I', 'GWC18AAD-D3NNA1D/I',
+                      'GWC12AAC-D3NNB4D/I', 'GWC12AAC-D3NNB4D/I', 'GWC24QE-D3NNB4D/I', 'GWC24QE-D3NNB4D/I',
+                      'GWC24QE-D3NNB4D/I', '', 'VI18F', 'GWC12QC-D3NNB4D/I', 'Eco Inverter',
+                      'GWC24QE-D3NNB4D/I', 'GWC24QE-D3NNB4D/I', 'GWC24QE-D3NNB4D/I', 'GWC24QE-D3NNB4D/I',
+                      '', '', 'LCS24F-02', 'LCS24F-02', '', ''],
+            'BTU': [12000, 12000, 18000, 18000, 18000, 18000, 18000, 18000, 12000, 18000, 12000, 18000,
+                   18000, 12000, 18000, 18000, 18000, 12000, 12000, 12000, 18000, 18000, 12000, 12000,
+                   24000, 24000, 24000, 12000, 18000, 12000, 12000, 24000, 24000, 24000, 24000, 24000,
+                   24000, 24000, 24000, 0, 12000],
+            'Data Manutenção': ['']*41,
+            'Técnico Executante': ['']*41,
+            'Aprovação Supervisor': ['']*41,
+            'Próxima manutenção': ['']*41
+        }
+        st.session_state.data = pd.DataFrame(initial_data)
+        st.session_state.data['BTU'] = st.session_state.data['BTU'].astype(str)
 
-# [Restante do código permanece igual]
+# Função principal
+def main():
+    try:
+        setup_page()
+        init_data()
+        
+        st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
+        st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
+        
+        menu = st.sidebar.selectbox("Menu", ["Consulta", "Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"])
+        
+        if menu == "Consulta":
+            show_consultation_page()
+        elif menu == "Adicionar Aparelho":
+            show_add_device_page()
+        elif menu == "Editar Aparelho":
+            show_edit_device_page()
+        elif menu == "Remover Aparelho":
+            show_remove_device_page()
+        elif menu == "Realizar Manutenção":
+            show_maintenance_page()
+            
+    except Exception as e:
+        st.error(f"Erro ao carregar a aplicação: {str(e)}")
+
+# Páginas específicas (implemente essas funções conforme necessário)
+def show_consultation_page():
+    st.header("Consulta de Aparelhos")
+    # Adicione aqui o conteúdo da página de consulta
+
+def show_add_device_page():
+    st.header("Adicionar Novo Aparelho")
+    # Adicione aqui o conteúdo da página de adição
+
+def show_edit_device_page():
+    st.header("Editar Aparelho Existente")
+    # Adicione aqui o conteúdo da página de edição
+
+def show_remove_device_page():
+    st.header("Remover Aparelho")
+    # Adicione aqui o conteúdo da página de remoção
+
+def show_maintenance_page():
+    st.header("Registrar Manutenção")
+    # Adicione aqui o conteúdo da página de manutenção
+
+if __name__ == "__main__":
+    main()
