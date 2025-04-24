@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
+from fpdf import FPDF
+import tempfile
+import os
 
 # Set page config
 st.set_page_config(
@@ -70,10 +73,70 @@ try:
 except:
     pass
 
+# Function to generate PDF report
+def generate_pdf_report(data, title="Relatório de Aparelhos"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Title
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt=title, ln=1, align='C')
+    pdf.ln(10)
+    
+    # Date
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
+    pdf.ln(5)
+    
+    # Table header
+    pdf.set_font("Arial", 'B', 10)
+    col_widths = [15, 20, 40, 30, 30, 15, 25, 30, 30]
+    headers = ["TAG", "Local", "Setor", "Marca", "Modelo", "BTU", "Última Manut.", "Próxima Manut.", "Técnico"]
+    
+    for i, header in enumerate(headers):
+        pdf.cell(col_widths[i], 10, txt=header, border=1, align='C')
+    pdf.ln()
+    
+    # Table content
+    pdf.set_font("Arial", size=8)
+    for _, row in data.iterrows():
+        pdf.cell(col_widths[0], 10, txt=str(row['TAG']), border=1, align='C')
+        pdf.cell(col_widths[1], 10, txt=row['Local'], border=1)
+        pdf.cell(col_widths[2], 10, txt=row['Setor'], border=1)
+        pdf.cell(col_widths[3], 10, txt=row['Marca'], border=1)
+        pdf.cell(col_widths[4], 10, txt=row['Modelo'], border=1)
+        pdf.cell(col_widths[5], 10, txt=str(row['BTU']), border=1, align='C')
+        pdf.cell(col_widths[6], 10, txt=row['Data Manutenção'], border=1, align='C')
+        pdf.cell(col_widths[7], 10, txt=row['Próxima manutenção'], border=1, align='C')
+        pdf.cell(col_widths[8], 10, txt=row['Técnico Executante'], border=1)
+        pdf.ln()
+    
+    # Statistics
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Estatísticas:", ln=1)
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 10, txt=f"Total de Aparelhos: {len(data)}", ln=1)
+    
+    try:
+        overdue = data[
+            (data['Próxima manutenção'] != '') & 
+            (pd.to_datetime(data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now())
+        ]
+        pdf.cell(200, 10, txt=f"Manutenções Atrasadas: {len(overdue)}", ln=1)
+    except:
+        pdf.cell(200, 10, txt="Manutenções Atrasadas: 0", ln=1)
+    
+    # Save to temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(temp_file.name)
+    return temp_file.name
+
 # Main app
 def main():
     st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle")
-    st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado AKR Brands")
+    st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
     
     # Navigation
     menu = st.sidebar.selectbox("Menu", ["Consulta", "Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"])
@@ -98,6 +161,36 @@ def main():
             filtered_data = filtered_data[filtered_data['Setor'] == setor_filter]
         if marca_filter != "Todos":
             filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
+        
+        # Multi-select for PDF report
+        st.subheader("Gerar Relatório em PDF")
+        selected_tags = st.multiselect(
+            "Selecione os aparelhos para incluir no relatório (deixe vazio para todos)",
+            options=filtered_data['TAG'].unique()
+        )
+        
+        if st.button("Gerar Relatório PDF"):
+            if selected_tags:
+                report_data = filtered_data[filtered_data['TAG'].isin(selected_tags)]
+                title = f"Relatório de Aparelhos Selecionados ({len(report_data)} itens)"
+            else:
+                report_data = filtered_data
+                title = f"Relatório Completo de Aparelhos ({len(report_data)} itens)"
+            
+            pdf_file = generate_pdf_report(report_data, title)
+            
+            with open(pdf_file, "rb") as f:
+                pdf_bytes = f.read()
+            
+            st.download_button(
+                label="Baixar Relatório PDF",
+                data=pdf_bytes,
+                file_name=f"relatorio_pmoc_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf"
+            )
+            
+            # Clean up
+            os.unlink(pdf_file)
         
         # Show data
         st.dataframe(
