@@ -78,7 +78,7 @@ def main():
     # Navigation
     menu = st.sidebar.selectbox("Menu", ["Consulta", "Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"])
     
-    if menu == "Consulta":
+        if menu == "Consulta":
     st.header("Consulta de Aparelhos")
     
     # Filters
