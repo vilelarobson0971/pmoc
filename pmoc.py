@@ -73,7 +73,7 @@ except:
 # Main app
 def main():
     st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle")
-    st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
+    st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado AKR Brands")
     
     # Navigation
     menu = st.sidebar.selectbox("Menu", ["Consulta", "Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"])
