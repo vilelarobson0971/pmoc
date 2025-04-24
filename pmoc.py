@@ -61,7 +61,7 @@ if 'data' not in st.session_state:
     st.session_state.data = pd.DataFrame(initial_data)
     st.session_state.data['BTU'] = st.session_state.data['BTU'].astype(str)
 
-# Function to save data (in a real app, this would save to a database)
+# Function to save data
 def save_data():
     st.session_state.data.to_csv('pmoc_data.csv', index=False)
     st.success("Dados salvos com sucesso!")
@@ -73,27 +73,34 @@ try:
 except:
     pass
 
-# Function to generate PDF report
+# Function to generate PDF report in landscape format
 def generate_pdf_report(data, title="Relatório de Aparelhos"):
-    pdf = FPDF()
+    pdf = FPDF(orientation='L')  # Landscape orientation
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    # Title
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, txt=title, ln=1, align='C')
-    pdf.ln(10)
-    
-    # Date
     pdf.set_font("Arial", size=10)
-    pdf.cell(200, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
+    
+    # Header with company name
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, txt="PMOC - Plano de Manutenção, Operação e Controle - AKR Brands", ln=1, align='C')
     pdf.ln(5)
+    
+    # Report title
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, txt=title, ln=1, align='C')
+    pdf.ln(5)
+    
+    # Date and time
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, txt=f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=1, align='R')
+    pdf.ln(10)
     
     # Table header
     pdf.set_font("Arial", 'B', 10)
-    col_widths = [15, 20, 40, 30, 30, 15, 25, 30, 30]
-    headers = ["TAG", "Local", "Setor", "Marca", "Modelo", "BTU", "Última Manut.", "Próxima Manut.", "Técnico"]
+    col_widths = [12, 20, 40, 25, 35, 12, 20, 20, 25, 25]  # Adjusted widths for landscape
+    headers = ["TAG", "Local", "Setor", "Marca", "Modelo", "BTU", "Última Manut.", 
+               "Próxima Manut.", "Técnico", "Aprovação"]
     
+    # Header row
     for i, header in enumerate(headers):
         pdf.cell(col_widths[i], 10, txt=header, border=1, align='C')
     pdf.ln()
@@ -101,32 +108,43 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
     # Table content
     pdf.set_font("Arial", size=8)
     for _, row in data.iterrows():
-        pdf.cell(col_widths[0], 10, txt=str(row['TAG']), border=1, align='C')
-        pdf.cell(col_widths[1], 10, txt=row['Local'], border=1)
-        pdf.cell(col_widths[2], 10, txt=row['Setor'], border=1)
-        pdf.cell(col_widths[3], 10, txt=row['Marca'], border=1)
-        pdf.cell(col_widths[4], 10, txt=row['Modelo'], border=1)
-        pdf.cell(col_widths[5], 10, txt=str(row['BTU']), border=1, align='C')
-        pdf.cell(col_widths[6], 10, txt=row['Data Manutenção'], border=1, align='C')
-        pdf.cell(col_widths[7], 10, txt=row['Próxima manutenção'], border=1, align='C')
-        pdf.cell(col_widths[8], 10, txt=row['Técnico Executante'], border=1)
+        pdf.cell(col_widths[0], 8, txt=str(row['TAG']), border=1, align='C')
+        pdf.cell(col_widths[1], 8, txt=row['Local'], border=1)
+        pdf.cell(col_widths[2], 8, txt=row['Setor'], border=1)
+        pdf.cell(col_widths[3], 8, txt=row['Marca'], border=1)
+        pdf.cell(col_widths[4], 8, txt=row['Modelo'], border=1)
+        pdf.cell(col_widths[5], 8, txt=str(row['BTU']), border=1, align='C')
+        pdf.cell(col_widths[6], 8, txt=row['Data Manutenção'], border=1, align='C')
+        pdf.cell(col_widths[7], 8, txt=row['Próxima manutenção'], border=1, align='C')
+        pdf.cell(col_widths[8], 8, txt=row['Técnico Executante'], border=1)
+        pdf.cell(col_widths[9], 8, txt=row['Aprovação Supervisor'], border=1)
         pdf.ln()
     
-    # Statistics
+    # Statistics section
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, txt="Estatísticas:", ln=1)
+    pdf.cell(0, 10, txt="Estatísticas:", ln=1)
     pdf.set_font("Arial", size=10)
-    pdf.cell(200, 10, txt=f"Total de Aparelhos: {len(data)}", ln=1)
+    
+    total = len(data)
+    pdf.cell(0, 10, txt=f"Total de Aparelhos: {total}", ln=1)
     
     try:
+        next_maintenance = len(data[data['Próxima manutenção'] != ''])
+        pdf.cell(0, 10, txt=f"Com próxima manutenção agendada: {next_maintenance}", ln=1)
+        
         overdue = data[
             (data['Próxima manutenção'] != '') & 
             (pd.to_datetime(data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now())
         ]
-        pdf.cell(200, 10, txt=f"Manutenções Atrasadas: {len(overdue)}", ln=1)
+        pdf.cell(0, 10, txt=f"Manutenções atrasadas: {len(overdue)}", ln=1)
     except:
-        pdf.cell(200, 10, txt="Manutenções Atrasadas: 0", ln=1)
+        pdf.cell(0, 10, txt="Erro ao calcular estatísticas de manutenção", ln=1)
+    
+    # Footer
+    pdf.ln(15)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(0, 10, txt="Sistema PMOC - AKR Brands", 0, 0, 'C')
     
     # Save to temporary file
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
@@ -135,7 +153,7 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
 
 # Main app
 def main():
-    st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle")
+    st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
     st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
     
     # Navigation
@@ -162,7 +180,7 @@ def main():
         if marca_filter != "Todos":
             filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
         
-        # Multi-select for PDF report
+        # PDF Report Section
         st.subheader("Gerar Relatório em PDF")
         selected_tags = st.multiselect(
             "Selecione os aparelhos para incluir no relatório (deixe vazio para todos)",
