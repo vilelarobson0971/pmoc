@@ -78,77 +78,76 @@ def main():
     # Navigation
     menu = st.sidebar.selectbox("Menu", ["Consulta", "Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"])
     
-        if menu == "Consulta":
-    st.header("Consulta de Aparelhos")
-    
-    # Filters
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        local_filter = st.selectbox("Local", ["Todos"] + list(st.session_state.data['Local'].unique()))
-    with col2:
-        setor_filter = st.selectbox("Setor", ["Todos"] + list(st.session_state.data['Setor'].unique()))
-    with col3:
-        marca_filter = st.selectbox("Marca", ["Todos"] + list(st.session_state.data['Marca'].unique()))
-    
-    # Apply filters
-    filtered_data = st.session_state.data.copy()
-    if local_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Local'] == local_filter]
-    if setor_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Setor'] == setor_filter]
-    if marca_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
-    
-    # Show data
-    st.dataframe(
-        filtered_data,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "TAG": "TAG",
-            "Local": "Local",
-            "Setor": "Setor",
-            "Marca": "Marca",
-            "Modelo": "Modelo",
-            "BTU": "BTU",
-            "Data Manutenção": st.column_config.DateColumn(
-                "Data Manutenção",
-                format="DD/MM/YYYY"
-            ),
-            "Técnico Executante": "Técnico",
-            "Aprovação Supervisor": "Aprovação",
-            "Próxima manutenção": st.column_config.DateColumn(
-                "Próxima Manutenção",
-                format="DD/MM/YYYY"
-            )
-        }
-    )
-    
-    # Export button
-    st.download_button(
-        label="Exportar para CSV",
-        data=st.session_state.data.to_csv(index=False).encode('utf-8'),
-        file_name='pmoc_export.csv',
-        mime='text/csv'
-    )
-    
-    # Statistics
-    st.subheader("Estatísticas")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total de Aparelhos", len(filtered_data))
-    with col2:
-        st.metric("Próximas Manutenções", len(filtered_data[filtered_data['Próxima manutenção'] != '']))
-    with col3:
-        try:
-            overdue = filtered_data[
-                (filtered_data['Próxima manutenção'] != '') & 
-                (pd.to_datetime(filtered_data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now())
-            ]
-            st.metric("Manutenções Atrasadas", len(overdue), delta=f"-{len(overdue)}" if len(overdue) > 0 else None)
-        except:
-            st.metric("Manutenções Atrasadas", 0)
-
+    if menu == "Consulta":
+        st.header("Consulta de Aparelhos")
+        
+        # Filters
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            local_filter = st.selectbox("Local", ["Todos"] + list(st.session_state.data['Local'].unique()))
+        with col2:
+            setor_filter = st.selectbox("Setor", ["Todos"] + list(st.session_state.data['Setor'].unique()))
+        with col3:
+            marca_filter = st.selectbox("Marca", ["Todos"] + list(st.session_state.data['Marca'].unique()))
+        
+        # Apply filters
+        filtered_data = st.session_state.data.copy()
+        if local_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Local'] == local_filter]
+        if setor_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Setor'] == setor_filter]
+        if marca_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
+        
+        # Show data
+        st.dataframe(
+            filtered_data,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "TAG": "TAG",
+                "Local": "Local",
+                "Setor": "Setor",
+                "Marca": "Marca",
+                "Modelo": "Modelo",
+                "BTU": "BTU",
+                "Data Manutenção": st.column_config.DateColumn(
+                    "Data Manutenção",
+                    format="DD/MM/YYYY"
+                ),
+                "Técnico Executante": "Técnico",
+                "Aprovação Supervisor": "Aprovação",
+                "Próxima manutenção": st.column_config.DateColumn(
+                    "Próxima Manutenção",
+                    format="DD/MM/YYYY"
+                )
+            }
+        )
+        
+        # Export button
+        st.download_button(
+            label="Exportar para CSV",
+            data=st.session_state.data.to_csv(index=False).encode('utf-8'),
+            file_name='pmoc_export.csv',
+            mime='text/csv'
+        )
+        
+        # Statistics
+        st.subheader("Estatísticas")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total de Aparelhos", len(filtered_data))
+        with col2:
+            st.metric("Próximas Manutenções", len(filtered_data[filtered_data['Próxima manutenção'] != '']))
+        with col3:
+            try:
+                overdue = filtered_data[
+                    (filtered_data['Próxima manutenção'] != '') & 
+                    (pd.to_datetime(filtered_data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now())
+                ]
+                st.metric("Manutenções Atrasadas", len(overdue), delta=f"-{len(overdue)}" if len(overdue) > 0 else None)
+            except:
+                st.metric("Manutenções Atrasadas", 0)
     
     elif menu == "Adicionar Aparelho":
         st.header("Adicionar Novo Aparelho")
