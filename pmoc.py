@@ -340,8 +340,9 @@ def show_edit_device_page():
                 modelo = st.text_input("Modelo", value=aparelho_data['Modelo'])
                 btu = st.number_input("BTU*", value=int(aparelho_data['BTU']), min_value=0, step=1000)
                 data_manutencao = st.date_input(
-                    "Data da Manutenção",
-                    value=datetime.strptime(aparelho_data['Data Manutenção'], '%d/%m/%Y') if aparelho_data['Data Manutenção'] else datetime.now()
+                    "Data da Manutenção (não altera a próxima manutenção)",
+                    value=datetime.strptime(aparelho_data['Data Manutenção'], '%d/%m/%Y') if aparelho_data['Data Manutenção'] else None,
+                    format="DD/MM/YYYY"
                 )
                 tecnico = st.text_input("Técnico Executante", value=aparelho_data['Técnico Executante'])
                 aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
@@ -352,18 +353,19 @@ def show_edit_device_page():
                 if not tag or not local or not setor or not marca or not btu:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    proxima_manutencao = data_manutencao + timedelta(days=180) if data_manutencao else ''
-                    # Atualiza cada coluna individualmente
+                    # Atualiza cada coluna individualmente sem alterar a data de manutenção ou próxima manutenção
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = btu
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Aprovação Supervisor'] = aprovacao
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Próxima manutenção'] = proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
+                    
+                    # Só atualiza a data de manutenção se foi explicitamente alterada
+                    if data_manutencao:
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     
                     save_data()
                     st.success("Aparelho atualizado com sucesso!")
@@ -410,11 +412,16 @@ def show_maintenance_page():
             
             data_manutencao = st.date_input(
                 "Data da Manutenção*",
-                value=datetime.now()
+                value=datetime.now(),
+                format="DD/MM/YYYY"
             )
             tecnico = st.text_input("Técnico Executante*", value=aparelho_data['Técnico Executante'])
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             observacoes = st.text_area("Observações")
+            
+            # Calcula a próxima manutenção automaticamente (6 meses depois)
+            proxima_manutencao = data_manutencao + timedelta(days=180)
+            st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
             
             st.markdown("(*) Campos obrigatórios")
             
@@ -422,7 +429,6 @@ def show_maintenance_page():
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    proxima_manutencao = data_manutencao + timedelta(days=180)
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
@@ -430,7 +436,7 @@ def show_maintenance_page():
                     
                     save_data()
                     st.success(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
-                    st.success(f"Próxima manutenção: {proxima_manutencao.strftime('%d/%m/%Y')}")
+                    st.success(f"Próxima manutenção agendada para: {proxima_manutencao.strftime('%d/%m/%Y')}")
                     st.rerun()
 
 # Função principal
