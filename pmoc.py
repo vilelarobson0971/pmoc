@@ -444,6 +444,7 @@ def show_maintenance_page():
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
+                    # Atualiza os dados da manutenção
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
