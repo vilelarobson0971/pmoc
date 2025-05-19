@@ -51,7 +51,7 @@ def init_data():
             'Técnico Executante': ['']*41,
             'Aprovação Supervisor': ['']*41,
             'Próxima manutenção': ['']*41,
-            'Observações': ['']*41  # Adicionando a coluna Observações inicializada
+            'Observações': ['']*41
         }
         st.session_state.data = pd.DataFrame(initial_data)
         st.session_state.data['BTU'] = st.session_state.data['BTU'].astype(str)
@@ -65,7 +65,6 @@ def save_data():
 def load_data():
     try:
         saved_data = pd.read_csv('pmoc_data.csv')
-        # Garantir que a coluna Observações existe
         if 'Observações' not in saved_data.columns:
             saved_data['Observações'] = ''
         st.session_state.data = saved_data
@@ -146,11 +145,9 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
         pdf.cell(0, 10, f"Total de Aparelhos: {total}", 0, 1)
         
         try:
-            # Contar manutenções agendadas
             next_maintenance = len(data[(data['Próxima manutenção'].notna()) & (data['Próxima manutenção'] != '')])
             pdf.cell(0, 10, f"Com próxima manutenção agendada: {next_maintenance}", 0, 1)
             
-            # Contar manutenções atrasadas
             overdue_count = 0
             for _, row in data.iterrows():
                 if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '':
@@ -294,12 +291,10 @@ def show_consultation_page():
     with col1:
         st.metric("Total de Aparelhos", len(filtered_data))
     with col2:
-        # Conta apenas os que têm data de manutenção registrada
         with_maintenance = len(filtered_data[filtered_data['Data Manutenção'] != ''])
         st.metric("Com manutenção registrada", with_maintenance)
     with col3:
         try:
-            # Calcula atrasados baseado na data calculada
             overdue_count = 0
             for _, row in display_data.iterrows():
                 if row['Próxima manutenção (calculada)'] not in ['aguardando programação', 'data inválida']:
@@ -388,7 +383,6 @@ def show_edit_device_page():
                 modelo = st.text_input("Modelo", value=aparelho_data['Modelo'])
                 btu = st.number_input("BTU*", value=int(aparelho_data['BTU']), min_value=0, step=1000)
                 
-                # Corrige o erro de conversão de data
                 data_manut_str = aparelho_data['Data Manutenção']
                 if pd.isna(data_manut_str) or data_manut_str == '':
                     data_manut_value = None
@@ -414,7 +408,6 @@ def show_edit_device_page():
                 if not tag or not local or not setor or not marca or not btu:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    # Atualiza cada coluna individualmente
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
@@ -425,7 +418,6 @@ def show_edit_device_page():
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Aprovação Supervisor'] = aprovacao
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Observações'] = observacoes
                     
-                    # Só atualiza a data de manutenção se foi explicitamente alterada
                     if data_manutencao:
                         st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     
@@ -482,7 +474,6 @@ def show_maintenance_page():
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
-            # Calcula a próxima manutenção automaticamente (6 meses depois)
             proxima_manutencao = data_manutencao + timedelta(days=180)
             st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
             
@@ -493,7 +484,6 @@ def show_maintenance_page():
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    # Atualiza os dados da manutenção
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
@@ -501,9 +491,47 @@ def show_maintenance_page():
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Observações'] = observacoes
                     
                     save_data()
-                    st.success(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
+                    
+                    # Mostrar popup de confirmação
+                    st.toast(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!", icon="✅")
                     st.success(f"Próxima manutenção agendada para: {proxima_manutencao.strftime('%d/%m/%Y')}")
                     st.rerun()
+
+# Configuração de acesso
+def check_password():
+    if 'password_correct' not in st.session_state:
+        st.session_state.password_correct = False
+    
+    if not st.session_state.password_correct:
+        password = st.text_input("Digite a senha de acesso:", type="password")
+        if password == "king@2025":
+            st.session_state.password_correct = True
+            st.rerun()
+        elif password != "":
+            st.error("Senha incorreta!")
+        return False
+    return True
+
+# Página de Configuração
+def show_configuration_page():
+    st.header("Configuração")
+    
+    if not check_password():
+        st.stop()
+    
+    config_option = st.sidebar.radio(
+        "Opções de Configuração",
+        ["Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"]
+    )
+    
+    if config_option == "Adicionar Aparelho":
+        show_add_device_page()
+    elif config_option == "Editar Aparelho":
+        show_edit_device_page()
+    elif config_option == "Remover Aparelho":
+        show_remove_device_page()
+    elif config_option == "Realizar Manutenção":
+        show_maintenance_page()
 
 # Função principal
 def main():
@@ -515,24 +543,16 @@ def main():
         st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
         st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
         
-        menu = st.sidebar.selectbox("Menu", [
-            "Consulta", 
-            "Adicionar Aparelho", 
-            "Editar Aparelho", 
-            "Remover Aparelho", 
-            "Realizar Manutenção"
-        ])
+        # Menu principal
+        menu = st.sidebar.radio(
+            "Menu Principal",
+            ["Consulta", "Configuração"]
+        )
         
         if menu == "Consulta":
             show_consultation_page()
-        elif menu == "Adicionar Aparelho":
-            show_add_device_page()
-        elif menu == "Editar Aparelho":
-            show_edit_device_page()
-        elif menu == "Remover Aparelho":
-            show_remove_device_page()
-        elif menu == "Realizar Manutenção":
-            show_maintenance_page()
+        elif menu == "Configuração":
+            show_configuration_page()
             
     except Exception as e:
         st.error(f"Ocorreu um erro inesperado: {str(e)}")
