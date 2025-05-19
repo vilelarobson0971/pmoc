@@ -353,20 +353,18 @@ def show_edit_device_page():
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
                     proxima_manutencao = data_manutencao + timedelta(days=180) if data_manutencao else ''
-                    updated_data = {
-                        'TAG': tag,
-                        'Local': local,
-                        'Setor': setor,
-                        'Marca': marca,
-                        'Modelo': modelo,
-                        'BTU': btu,
-                        'Data Manutenção': data_manutencao.strftime('%d/%m/%Y') if data_manutencao else '',
-                        'Técnico Executante': tecnico,
-                        'Aprovação Supervisor': aprovacao,
-                        'Próxima manutenção': proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
-                    }
+                    # Atualiza cada coluna individualmente
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = btu
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Técnico Executante'] = tecnico
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Aprovação Supervisor'] = aprovacao
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Próxima manutenção'] = proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
                     
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit] = pd.Series(updated_data)
                     save_data()
                     st.success("Aparelho atualizado com sucesso!")
                     st.rerun()
