@@ -189,6 +189,21 @@ def show_consultation_page():
     if marca_filter != "Todos":
         filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
     
+    # Calcular próxima manutenção para exibição
+    display_data = filtered_data.copy()
+    
+    def calculate_next_maintenance(row):
+        if row['Data Manutenção'] and str(row['Data Manutenção']) != '':
+            try:
+                maintenance_date = datetime.strptime(str(row['Data Manutenção']), '%d/%m/%Y')
+                next_maintenance = maintenance_date + timedelta(days=180)
+                return next_maintenance.strftime('%d/%m/%Y')
+            except:
+                return 'data inválida'
+        return 'aguardando programação'
+    
+    display_data['Próxima manutenção (calculada)'] = display_data.apply(calculate_next_maintenance, axis=1)
+    
     # Seção de Relatório PDF
     st.subheader("Gerar Relatório em PDF")
     selected_tags = st.multiselect(
@@ -220,14 +235,15 @@ def show_consultation_page():
             # Limpeza
             os.unlink(pdf_file)
     
-    # Mostrar dados - Removendo a coluna "Próxima manutenção" da exibição
+    # Mostrar dados com a coluna calculada
     columns_to_show = [
         "TAG", "Local", "Setor", "Marca", "Modelo", 
-        "BTU", "Data Manutenção", "Técnico Executante", "Aprovação Supervisor"
+        "BTU", "Data Manutenção", "Próxima manutenção (calculada)",
+        "Técnico Executante", "Aprovação Supervisor"
     ]
     
     st.dataframe(
-        filtered_data[columns_to_show],
+        display_data[columns_to_show],
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -240,6 +256,10 @@ def show_consultation_page():
             "Data Manutenção": st.column_config.DateColumn(
                 "Data Manutenção",
                 format="DD/MM/YYYY"
+            ),
+            "Próxima manutenção (calculada)": st.column_config.Column(
+                "Próxima Manutenção",
+                help="Calculada automaticamente como Data Manutenção + 180 dias"
             ),
             "Técnico Executante": "Técnico",
             "Aprovação Supervisor": "Aprovação"
@@ -260,15 +280,24 @@ def show_consultation_page():
     with col1:
         st.metric("Total de Aparelhos", len(filtered_data))
     with col2:
-        st.metric("Próximas Manutenções", len(filtered_data[filtered_data['Próxima manutenção'] != '']))
+        # Conta apenas os que têm data de manutenção registrada
+        with_maintenance = len(filtered_data[filtered_data['Data Manutenção'] != ''])
+        st.metric("Com manutenção registrada", with_maintenance)
     with col3:
         try:
-            overdue = filtered_data[
-                (filtered_data['Próxima manutenção'] != '') & 
-                (pd.to_datetime(filtered_data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now(pytz.timezone('America/Sao_Paulo')))
-            ]
-            st.metric("Manutenções Atrasadas", len(overdue), delta=f"-{len(overdue)}" if len(overdue) > 0 else None)
-        except:
+            # Calcula atrasados baseado na data calculada
+            overdue_count = 0
+            for _, row in display_data.iterrows():
+                if row['Próxima manutenção (calculada)'] not in ['aguardando programação', 'data inválida']:
+                    try:
+                        next_date = datetime.strptime(row['Próxima manutenção (calculada)'], '%d/%m/%Y')
+                        if next_date < datetime.now():
+                            overdue_count += 1
+                    except:
+                        pass
+            st.metric("Manutenções Atrasadas", overdue_count, delta=f"-{overdue_count}" if overdue_count > 0 else None)
+        except Exception as e:
+            st.error(f"Erro ao calcular atrasos: {str(e)}")
             st.metric("Manutenções Atrasadas", 0)
 
 # Página de Adicionar Aparelho
