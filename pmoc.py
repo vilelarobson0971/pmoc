@@ -51,7 +51,7 @@ def init_data():
             'Técnico Executante': ['']*41,
             'Aprovação Supervisor': ['']*41,
             'Próxima manutenção': ['']*41,
-            'Observações': ['']*41
+            'Observações': ['']*41  # Adicionando a coluna Observações inicializada
         }
         st.session_state.data = pd.DataFrame(initial_data)
         st.session_state.data['BTU'] = st.session_state.data['BTU'].astype(str)
@@ -65,6 +65,9 @@ def save_data():
 def load_data():
     try:
         saved_data = pd.read_csv('pmoc_data.csv')
+        # Garantir que a coluna Observações existe
+        if 'Observações' not in saved_data.columns:
+            saved_data['Observações'] = ''
         st.session_state.data = saved_data
     except:
         pass
@@ -402,7 +405,7 @@ def show_edit_device_page():
                 )
                 tecnico = st.text_input("Técnico Executante", value=aparelho_data['Técnico Executante'])
                 aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
-                observacoes = st.text_area("Observações", value=aparelho_data['Observações'] if 'Observações' in aparelho_data else '')
+                observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
             st.markdown("(*) Campos obrigatórios")
             submit_button = st.form_submit_button("Atualizar Aparelho")
@@ -446,6 +449,7 @@ def show_remove_device_page():
         st.write(f"Local: {aparelho_data['Local']}")
         st.write(f"Setor: {aparelho_data['Setor']}")
         st.write(f"Marca/Modelo: {aparelho_data['Marca']} {aparelho_data['Modelo']}")
+        st.write(f"Observações: {aparelho_data['Observações']}")
         
         if st.button("Confirmar Remoção"):
             st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
@@ -476,7 +480,7 @@ def show_maintenance_page():
             )
             tecnico = st.text_input("Técnico Executante*", value=aparelho_data['Técnico Executante'])
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
-            observacoes = st.text_area("Observações", value=aparelho_data['Observações'] if 'Observações' in aparelho_data else '')
+            observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
             # Calcula a próxima manutenção automaticamente (6 meses depois)
             proxima_manutencao = data_manutencao + timedelta(days=180)
