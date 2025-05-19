@@ -220,9 +220,14 @@ def show_consultation_page():
             # Limpeza
             os.unlink(pdf_file)
     
-    # Mostrar dados
+    # Mostrar dados - Removendo a coluna "Próxima manutenção" da exibição
+    columns_to_show = [
+        "TAG", "Local", "Setor", "Marca", "Modelo", 
+        "BTU", "Data Manutenção", "Técnico Executante", "Aprovação Supervisor"
+    ]
+    
     st.dataframe(
-        filtered_data,
+        filtered_data[columns_to_show],
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -237,11 +242,7 @@ def show_consultation_page():
                 format="DD/MM/YYYY"
             ),
             "Técnico Executante": "Técnico",
-            "Aprovação Supervisor": "Aprovação",
-            "Próxima manutenção": st.column_config.DateColumn(
-                "Próxima Manutenção",
-                format="DD/MM/YYYY"
-            )
+            "Aprovação Supervisor": "Aprovação"
         }
     )
     
@@ -408,7 +409,7 @@ def show_remove_device_page():
             st.success("Aparelho removido com sucesso!")
             st.rerun()
 
-# Página de Realizar Manutenção - Versão Corrigida
+# Página de Realizar Manutenção
 def show_maintenance_page():
     st.header("Registrar Manutenção")
     
@@ -433,7 +434,7 @@ def show_maintenance_page():
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             observacoes = st.text_area("Observações")
             
-            # Calcula a próxima manutenção (6 meses depois)
+            # Calcula a próxima manutenção automaticamente (6 meses depois)
             proxima_manutencao = data_manutencao + timedelta(days=180)
             st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
             
@@ -444,25 +445,16 @@ def show_maintenance_page():
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    try:
-                        # Atualiza os dados no DataFrame
-                        idx = st.session_state.data[st.session_state.data['TAG'] == tag_to_maintain].index[0]
-                        
-                        st.session_state.data.at[idx, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
-                        st.session_state.data.at[idx, 'Técnico Executante'] = tecnico
-                        st.session_state.data.at[idx, 'Aprovação Supervisor'] = aprovacao
-                        st.session_state.data.at[idx, 'Próxima manutenção'] = proxima_manutencao.strftime('%d/%m/%Y')
-                        
-                        # Força a conversão para string para evitar problemas
-                        st.session_state.data['Data Manutenção'] = st.session_state.data['Data Manutenção'].astype(str)
-                        st.session_state.data['Próxima manutenção'] = st.session_state.data['Próxima manutenção'].astype(str)
-                        
-                        save_data()
-                        st.success(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
-                        st.success(f"Próxima manutenção agendada para: {proxima_manutencao.strftime('%d/%m/%Y')}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao salvar os dados: {str(e)}")
+                    # Atualiza os dados da manutenção
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Próxima manutenção'] = proxima_manutencao.strftime('%d/%m/%Y')
+                    
+                    save_data()
+                    st.success(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
+                    st.success(f"Próxima manutenção agendada para: {proxima_manutencao.strftime('%d/%m/%Y')}")
+                    st.rerun()
 
 # Função principal
 def main():
