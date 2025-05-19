@@ -50,7 +50,8 @@ def init_data():
             'Data Manutenção': ['']*41,
             'Técnico Executante': ['']*41,
             'Aprovação Supervisor': ['']*41,
-            'Próxima manutenção': ['']*41
+            'Próxima manutenção': ['']*41,
+            'Observações': ['']*41
         }
         st.session_state.data = pd.DataFrame(initial_data)
         st.session_state.data['BTU'] = st.session_state.data['BTU'].astype(str)
@@ -98,33 +99,34 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
         pdf.ln(8)
         
         # Configuração das colunas
-        col_widths = [12, 20, 35, 25, 30, 12, 28, 28, 25, 25]
+        col_widths = [12, 20, 30, 20, 25, 12, 25, 25, 25, 25, 40]
         headers = [
             "TAG", "Local", "Setor", "Marca", "Modelo", 
             "BTU", "Última Manut.", "Próx. Manut.", 
-            "Técnico", "Aprovação"
+            "Técnico", "Aprovação", "Observações"
         ]
         
         # Cabeçalho da tabela
-        pdf.set_font("Arial", 'B', 9)
+        pdf.set_font("Arial", 'B', 8)
         for i, header in enumerate(headers):
             pdf.cell(col_widths[i], 8, header, 1, 0, 'C')
         pdf.ln()
         
         # Conteúdo da tabela
-        pdf.set_font("Arial", size=8)
+        pdf.set_font("Arial", size=7)
         for _, row in data.iterrows():
             cells = [
                 str(row['TAG'])[:10] if pd.notna(row['TAG']) else '',
                 str(row['Local'])[:18] if pd.notna(row['Local']) else '',
-                str(row['Setor'])[:30] if pd.notna(row['Setor']) else '',
-                str(row['Marca'])[:22] if pd.notna(row['Marca']) else '',
-                str(row['Modelo'])[:28] if pd.notna(row['Modelo']) else '',
+                str(row['Setor'])[:25] if pd.notna(row['Setor']) else '',
+                str(row['Marca'])[:18] if pd.notna(row['Marca']) else '',
+                str(row['Modelo'])[:22] if pd.notna(row['Modelo']) else '',
                 str(row['BTU'])[:10] if pd.notna(row['BTU']) else '',
-                str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) else '',
-                str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) else '',
+                str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '' else 'N/A',
+                str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '' else 'N/A',
                 str(row['Técnico Executante'])[:22] if pd.notna(row['Técnico Executante']) else '',
-                str(row['Aprovação Supervisor'])[:22] if pd.notna(row['Aprovação Supervisor']) else ''
+                str(row['Aprovação Supervisor'])[:22] if pd.notna(row['Aprovação Supervisor']) else '',
+                str(row['Observações'])[:60] if pd.notna(row['Observações']) and str(row['Observações']) != '' else 'Nenhuma'
             ]
             
             for i, cell in enumerate(cells):
@@ -141,14 +143,22 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
         pdf.cell(0, 10, f"Total de Aparelhos: {total}", 0, 1)
         
         try:
-            next_maintenance = len(data[data['Próxima manutenção'] != ''])
+            # Contar manutenções agendadas
+            next_maintenance = len(data[(data['Próxima manutenção'].notna()) & (data['Próxima manutenção'] != '')])
             pdf.cell(0, 10, f"Com próxima manutenção agendada: {next_maintenance}", 0, 1)
             
-            overdue = data[
-                (data['Próxima manutenção'] != '') & 
-                (pd.to_datetime(data['Próxima manutenção'], errors='coerce', dayfirst=True) < datetime.now(tz))
-            ]
-            pdf.cell(0, 10, f"Manutenções atrasadas: {len(overdue)}", 0, 1)
+            # Contar manutenções atrasadas
+            overdue_count = 0
+            for _, row in data.iterrows():
+                if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '':
+                    try:
+                        next_date = datetime.strptime(str(row['Próxima manutenção']), '%d/%m/%Y')
+                        if next_date < datetime.now():
+                            overdue_count += 1
+                    except:
+                        pass
+            
+            pdf.cell(0, 10, f"Manutenções atrasadas: {overdue_count}", 0, 1)
         except Exception as e:
             pdf.cell(0, 10, f"Erro ao calcular estatísticas: {str(e)[:50]}", 0, 1)
         
@@ -239,7 +249,7 @@ def show_consultation_page():
     columns_to_show = [
         "TAG", "Local", "Setor", "Marca", "Modelo", 
         "BTU", "Data Manutenção", "Próxima manutenção (calculada)",
-        "Técnico Executante", "Aprovação Supervisor"
+        "Técnico Executante", "Aprovação Supervisor", "Observações"
     ]
     
     st.dataframe(
@@ -262,7 +272,8 @@ def show_consultation_page():
                 help="Calculada automaticamente como Data Manutenção + 180 dias"
             ),
             "Técnico Executante": "Técnico",
-            "Aprovação Supervisor": "Aprovação"
+            "Aprovação Supervisor": "Aprovação",
+            "Observações": "Observações"
         }
     )
     
@@ -317,6 +328,7 @@ def show_add_device_page():
             data_manutencao = st.date_input("Data da Manutenção")
             tecnico = st.text_input("Técnico Executante")
             aprovacao = st.text_input("Aprovação Supervisor")
+            observacoes = st.text_area("Observações")
         
         st.markdown("(*) Campos obrigatórios")
         submit_button = st.form_submit_button("Adicionar Aparelho")
@@ -338,7 +350,8 @@ def show_add_device_page():
                     'Data Manutenção': data_manutencao.strftime('%d/%m/%Y') if data_manutencao else '',
                     'Técnico Executante': tecnico,
                     'Aprovação Supervisor': aprovacao,
-                    'Próxima manutenção': proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else ''
+                    'Próxima manutenção': proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else '',
+                    'Observações': observacoes
                 }
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                 save_data()
@@ -389,6 +402,7 @@ def show_edit_device_page():
                 )
                 tecnico = st.text_input("Técnico Executante", value=aparelho_data['Técnico Executante'])
                 aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
+                observacoes = st.text_area("Observações", value=aparelho_data['Observações'] if 'Observações' in aparelho_data else '')
             
             st.markdown("(*) Campos obrigatórios")
             submit_button = st.form_submit_button("Atualizar Aparelho")
@@ -397,7 +411,7 @@ def show_edit_device_page():
                 if not tag or not local or not setor or not marca or not btu:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
-                    # Atualiza cada coluna individualmente sem alterar a data de manutenção ou próxima manutenção
+                    # Atualiza cada coluna individualmente
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
@@ -406,6 +420,7 @@ def show_edit_device_page():
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = btu
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Aprovação Supervisor'] = aprovacao
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Observações'] = observacoes
                     
                     # Só atualiza a data de manutenção se foi explicitamente alterada
                     if data_manutencao:
@@ -461,7 +476,7 @@ def show_maintenance_page():
             )
             tecnico = st.text_input("Técnico Executante*", value=aparelho_data['Técnico Executante'])
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
-            observacoes = st.text_area("Observações")
+            observacoes = st.text_area("Observações", value=aparelho_data['Observações'] if 'Observações' in aparelho_data else '')
             
             # Calcula a próxima manutenção automaticamente (6 meses depois)
             proxima_manutencao = data_manutencao + timedelta(days=180)
@@ -479,6 +494,7 @@ def show_maintenance_page():
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Próxima manutenção'] = proxima_manutencao.strftime('%d/%m/%Y')
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Observações'] = observacoes
                     
                     save_data()
                     st.success(f"Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
