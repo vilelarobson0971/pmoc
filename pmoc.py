@@ -5,6 +5,7 @@ import pytz
 from fpdf import FPDF
 import tempfile
 import os
+import numpy as np
 
 # Configuração inicial da página
 def setup_page():
@@ -288,8 +289,9 @@ def show_add_device_page():
             aprovacao = st.text_input("Aprovação Supervisor")
         
         st.markdown("(*) Campos obrigatórios")
+        submit_button = st.form_submit_button("Adicionar Aparelho")
         
-        if st.form_submit_button("Adicionar Aparelho"):
+        if submit_button:
             if tag in st.session_state.data['TAG'].values:
                 st.error("Já existe um aparelho com esta TAG!")
             elif not tag or not local or not setor or not marca or not btu:
@@ -339,17 +341,29 @@ def show_edit_device_page():
             with col2:
                 modelo = st.text_input("Modelo", value=aparelho_data['Modelo'])
                 btu = st.number_input("BTU*", value=int(aparelho_data['BTU']), min_value=0, step=1000)
+                
+                # Corrige o erro de conversão de data
+                data_manut_str = aparelho_data['Data Manutenção']
+                if pd.isna(data_manut_str) or data_manut_str == '':
+                    data_manut_value = None
+                else:
+                    try:
+                        data_manut_value = datetime.strptime(str(data_manut_str), '%d/%m/%Y').date() if data_manut_str else None
+                    except:
+                        data_manut_value = None
+                
                 data_manutencao = st.date_input(
                     "Data da Manutenção (não altera a próxima manutenção)",
-                    value=datetime.strptime(aparelho_data['Data Manutenção'], '%d/%m/%Y') if aparelho_data['Data Manutenção'] else None,
+                    value=data_manut_value,
                     format="DD/MM/YYYY"
                 )
                 tecnico = st.text_input("Técnico Executante", value=aparelho_data['Técnico Executante'])
                 aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             
             st.markdown("(*) Campos obrigatórios")
+            submit_button = st.form_submit_button("Atualizar Aparelho")
             
-            if st.form_submit_button("Atualizar Aparelho"):
+            if submit_button:
                 if not tag or not local or not setor or not marca or not btu:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
@@ -424,8 +438,9 @@ def show_maintenance_page():
             st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
             
             st.markdown("(*) Campos obrigatórios")
+            submit_button = st.form_submit_button("Registrar Manutenção")
             
-            if st.form_submit_button("Registrar Manutenção"):
+            if submit_button:
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
