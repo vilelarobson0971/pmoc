@@ -8,6 +8,7 @@ import os
 import numpy as np
 import requests
 import base64
+import io
 
 # Configuração inicial da página
 def setup_page():
@@ -34,7 +35,7 @@ def load_from_github(repo, file_path, token=None):
         content = response.json()["content"]
         decoded_content = base64.b64decode(content).decode("utf-8")
         
-        return pd.read_csv(pd.compat.StringIO(decoded_content))
+        return pd.read_csv(io.StringIO(decoded_content))
     except Exception as e:
         st.error(f"Erro ao carregar dados do GitHub: {str(e)}")
         return None
