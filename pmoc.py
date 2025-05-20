@@ -6,6 +6,8 @@ from fpdf import FPDF
 import tempfile
 import os
 import numpy as np
+import requests
+import base64
 
 # Configuração inicial da página
 def setup_page():
@@ -14,6 +16,57 @@ def setup_page():
         page_icon="❄️",
         layout="wide"
     )
+
+# Funções para sincronização com GitHub
+def get_github_file_url(repo, file_path):
+    return f"https://api.github.com/repos/{repo}/contents/{file_path}"
+
+def load_from_github(repo, file_path, token=None):
+    try:
+        url = get_github_file_url(repo, file_path)
+        headers = {}
+        if token:
+            headers["Authorization"] = f"token {token}"
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        content = response.json()["content"]
+        decoded_content = base64.b64decode(content).decode("utf-8")
+        
+        return pd.read_csv(pd.compat.StringIO(decoded_content))
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do GitHub: {str(e)}")
+        return None
+
+def save_to_github(repo, file_path, data, token=None):
+    try:
+        url = get_github_file_url(repo, file_path)
+        headers = {}
+        if token:
+            headers["Authorization"] = f"token {token}"
+        
+        # Primeiro obtém o SHA do arquivo existente
+        response = requests.get(url, headers=headers)
+        sha = response.json().get("sha", "") if response.status_code == 200 else ""
+        
+        # Converte o DataFrame para CSV
+        csv_data = data.to_csv(index=False)
+        encoded_content = base64.b64encode(csv_data.encode("utf-8")).decode("utf-8")
+        
+        payload = {
+            "message": f"Atualização PMOC - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "content": encoded_content,
+            "sha": sha if sha else None
+        }
+        
+        response = requests.put(url, json=payload, headers=headers)
+        response.raise_for_status()
+        
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar dados no GitHub: {str(e)}")
+        return False
 
 # Inicialização dos dados
 def init_data():
@@ -58,18 +111,47 @@ def init_data():
 
 # Função para salvar dados
 def save_data():
-    st.session_state.data.to_csv('pmoc_data.csv', index=False)
-    st.success("Dados salvos com sucesso!")
+    try:
+        # Configurações do GitHub
+        repo = "vilelarobson0971/pmoc"
+        file_path = "pmoc.csv"
+        
+        # Verifica se o token está na sessão
+        if 'github_token' not in st.session_state or not st.session_state.github_token:
+            st.error("Token de acesso ao GitHub não configurado. Configure na página de Configuração.")
+            return False
+        
+        # Salva no GitHub
+        if save_to_github(repo, file_path, st.session_state.data, st.session_state.github_token):
+            st.success("Dados salvos no GitHub com sucesso!")
+            return True
+        else:
+            st.error("Falha ao salvar dados no GitHub.")
+            return False
+    except Exception as e:
+        st.error(f"Erro ao salvar dados: {str(e)}")
+        return False
 
 # Carregar dados salvos
 def load_data():
     try:
-        saved_data = pd.read_csv('pmoc_data.csv')
-        if 'Observações' not in saved_data.columns:
-            saved_data['Observações'] = ''
-        st.session_state.data = saved_data
-    except:
-        pass
+        # Configurações do GitHub
+        repo = "vilelarobson0971/pmoc"
+        file_path = "pmoc.csv"
+        
+        # Verifica se o token está na sessão
+        if 'github_token' not in st.session_state or not st.session_state.github_token:
+            st.warning("Token de acesso ao GitHub não configurado. Usando dados locais.")
+            return
+        
+        # Carrega do GitHub
+        saved_data = load_from_github(repo, file_path, st.session_state.github_token)
+        if saved_data is not None:
+            if 'Observações' not in saved_data.columns:
+                saved_data['Observações'] = ''
+            st.session_state.data = saved_data
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {str(e)}")
 
 # Gerar relatório PDF
 def generate_pdf_report(data, title="Relatório de Aparelhos"):
@@ -519,6 +601,42 @@ def show_configuration_page():
     if not check_password():
         st.stop()
     
+    # Configuração do Token do GitHub
+    st.subheader("Configuração do GitHub")
+    if 'github_token' not in st.session_state:
+        st.session_state.github_token = ""
+    
+    github_token = st.text_input(
+        "Token de Acesso ao GitHub (obrigatório para sincronização)",
+        type="password",
+        value=st.session_state.github_token
+    )
+    
+    if st.button("Salvar Token"):
+        st.session_state.github_token = github_token
+        st.success("Token salvo com sucesso!")
+    
+    # Sincronização manual
+    st.subheader("Sincronização Manual")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Carregar Dados do GitHub"):
+            if st.session_state.github_token:
+                load_data()
+                st.success("Dados carregados do GitHub com sucesso!")
+            else:
+                st.error("Token de acesso não configurado!")
+    
+    with col2:
+        if st.button("Salvar Dados no GitHub"):
+            if st.session_state.github_token:
+                if save_data():
+                    st.success("Dados salvos no GitHub com sucesso!")
+            else:
+                st.error("Token de acesso não configurado!")
+    
+    # Menu de configuração
     config_option = st.sidebar.radio(
         "Opções de Configuração",
         ["Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"]
