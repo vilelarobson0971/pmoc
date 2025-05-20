@@ -1,5 +1,5 @@
 TAG,Local,Setor,Marca,Modelo,BTU,Data Manutenção,Técnico Executante,Aprovação Supervisor,Próxima manutenção,Observações
-1,Matriz,Recepção,Springer,42MACA12S5,12000,,,,,
+1,Matriz,Recepção,Springer,42MACA12S5,12000,19/05/2025,Guilherme,Robson,15/11/2025,Efetuado limpeza e higienização
 2,Matriz,CPD,Philco,Eco Inverter,12000,,,,,
 3,Matriz,CPD,Elgin,HWFL18B2IA,18000,,,,,
 4,Matriz,RH,Springer,42MACB18S5,18000,,,,,
@@ -38,4 +38,4 @@ TAG,Local,Setor,Marca,Modelo,BTU,Data Manutenção,Técnico Executante,Aprovaç�
 37,Filial,Estúdio,Springer,,24000,,,,,
 38,Matriz,Refeitório,Agratto,LCS24F-02,24000,,,,,
 39,Matriz,Refeitório,Agratto,LCS24F-02,24000,,,,,
-40,Matriz,e-Commerce,nan,nan,12000,19/05/2025,Guilherme,Robson,,Efetuado limpeza e higienização
+40,Matriz,e-Commerce,,,12000,19/05/2025,Guilherme,Robson,,Efetuado limpeza e higienização
