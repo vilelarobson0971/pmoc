@@ -30,11 +30,20 @@ def load_from_github(repo, file_path, token=None):
             headers["Authorization"] = f"token {token}"
         
         response = requests.get(url, headers=headers)
+        
+        # Se o arquivo não existir (404), retorna None
+        if response.status_code == 404:
+            return None
+            
         response.raise_for_status()
         
         content = response.json()["content"]
         decoded_content = base64.b64decode(content).decode("utf-8")
         
+        # Verifica se o conteúdo está vazio
+        if not decoded_content.strip():
+            return None
+            
         return pd.read_csv(io.StringIO(decoded_content))
     except Exception as e:
         st.error(f"Erro ao carregar dados do GitHub: {str(e)}")
@@ -147,10 +156,14 @@ def load_data():
         
         # Carrega do GitHub
         saved_data = load_from_github(repo, file_path, st.session_state.github_token)
+        
         if saved_data is not None:
             if 'Observações' not in saved_data.columns:
                 saved_data['Observações'] = ''
             st.session_state.data = saved_data
+        else:
+            st.warning("Arquivo no GitHub está vazio ou não existe. Usando dados locais.")
+            
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
 
