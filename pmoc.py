@@ -624,7 +624,8 @@ def show_configuration_page():
         st.session_state.github_token = ""
     
     github_token = st.text_input(
-        "Token de Acesso ao GitHub (obrigatório para sincronização)",
+        "Token de Acesso ao GitHub (obrigatório para sincronização) github_pat_ 11BOAQEOY03WqoYaYst4z2_mG2dZCK8GOmXsnUzBTHXteNtsxhracvG7bg2VtYhPs7GLCWWIE6epvWVIPW
+",
         type="password",
         value=st.session_state.github_token,
         help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
