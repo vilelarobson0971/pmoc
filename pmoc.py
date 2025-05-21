@@ -620,6 +620,8 @@ def show_configuration_page():
     
     # Configuração do Token do GitHub
     st.subheader("Configuração do GitHub")
+    st.text("github_pat_ 11BOAQEOY03WqoYaYst4z2_mG2dZCK8GOmXsnUzBTHXteNtsxhracvG7bg2VtYhPs7GLCWWIE6epvWVIPW")
+    
     if 'github_token' not in st.session_state:
         st.session_state.github_token = ""
     
@@ -667,6 +669,11 @@ def show_configuration_page():
         show_remove_device_page()
     elif config_option == "Realizar Manutenção":
         show_maintenance_page()
+    
+    # Rodapé
+    st.sidebar.markdown("---")
+    st.sidebar.text("Desenvolvido por Robson Vilela")
+    st.sidebar.text("Versão 1.0 2025")
 
 # Função principal
 def main():
