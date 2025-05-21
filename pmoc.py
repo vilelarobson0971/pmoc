@@ -409,6 +409,12 @@ def show_consultation_page():
         except Exception as e:
             st.error(f"Erro ao calcular atrasos: {str(e)}")
             st.metric("Manutenções Atrasadas", 0)
+    
+    # Rodapé
+    st.sidebar.markdown("---")
+    st.sidebar.text("Desenvolvido por Robson Vilela")
+    st.sidebar.text("Versão 1.0")
+    st.sidebar.text("2025")
 
 # Página de Adicionar Aparelho
 def show_add_device_page():
@@ -424,7 +430,7 @@ def show_add_device_page():
         with col2:
             modelo = st.text_input("Modelo")
             btu = st.number_input("BTU*", min_value=0, step=1000)
-            data_manutencao = st.date_input("Data da Manutenção")
+            data_manutencao = st.date_input("Data da Manutenção", format="DD/MM/YYYY")
             tecnico = st.text_input("Técnico Executante")
             aprovacao = st.text_input("Aprovação Supervisor")
             observacoes = st.text_area("Observações")
@@ -483,24 +489,6 @@ def show_edit_device_page():
             with col2:
                 modelo = st.text_input("Modelo", value=aparelho_data['Modelo'])
                 btu = st.number_input("BTU*", value=int(aparelho_data['BTU']), min_value=0, step=1000)
-                
-                data_manut_str = aparelho_data['Data Manutenção']
-                if pd.isna(data_manut_str) or data_manut_str == '':
-                    data_manut_value = None
-                else:
-                    try:
-                        data_manut_value = datetime.strptime(str(data_manut_str), '%d/%m/%Y').date() if data_manut_str else None
-                    except:
-                        data_manut_value = None
-                
-                data_manutencao = st.date_input(
-                    "Data da Manutenção (não altera a próxima manutenção)",
-                    value=data_manut_value,
-                    format="DD/MM/YYYY"
-                )
-                tecnico = st.text_input("Técnico Executante", value=aparelho_data['Técnico Executante'])
-                aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
-                observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
             st.markdown("(*) Campos obrigatórios")
             submit_button = st.form_submit_button("Atualizar Aparelho")
@@ -515,12 +503,6 @@ def show_edit_device_page():
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = btu
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Técnico Executante'] = tecnico
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Aprovação Supervisor'] = aprovacao
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Observações'] = observacoes
-                    
-                    if data_manutencao:
-                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     
                     if save_data():
                         st.success("Aparelho atualizado com sucesso!")
@@ -568,15 +550,17 @@ def show_maintenance_page():
             
             data_manutencao = st.date_input(
                 "Data da Manutenção*",
-                value=datetime.now(),
                 format="DD/MM/YYYY"
             )
             tecnico = st.text_input("Técnico Executante*", value=aparelho_data['Técnico Executante'])
             aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
-            proxima_manutencao = data_manutencao + timedelta(days=180)
-            st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
+            if data_manutencao:
+                proxima_manutencao = data_manutencao + timedelta(days=180)
+                st.write(f"**Próxima manutenção será automaticamente agendada para:** {proxima_manutencao.strftime('%d/%m/%Y')}")
+            else:
+                st.write("**Próxima manutenção:** Não definida (insira uma data de manutenção)")
             
             st.markdown("(*) Campos obrigatórios")
             submit_button = st.form_submit_button("Registrar Manutenção")
@@ -585,6 +569,7 @@ def show_maintenance_page():
                 if not data_manutencao or not tecnico:
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
+                    proxima_manutencao = data_manutencao + timedelta(days=180)
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = data_manutencao.strftime('%d/%m/%Y')
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = tecnico
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = aprovacao
@@ -673,7 +658,8 @@ def show_configuration_page():
     # Rodapé
     st.sidebar.markdown("---")
     st.sidebar.text("Desenvolvido por Robson Vilela")
-    st.sidebar.text("Versão 1.0 2025")
+    st.sidebar.text("Versão 1.0")
+    st.sidebar.text("2025")
 
 # Função principal
 def main():
