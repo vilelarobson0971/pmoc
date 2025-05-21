@@ -364,9 +364,9 @@ def show_consultation_page():
             "Marca": "Marca",
             "Modelo": "Modelo",
             "BTU": "BTU",
-            "Data Manutenção": st.column_config.DateColumn(
+            "Data Manutenção": st.column_config.TextColumn(
                 "Data Manutenção",
-                format="DD/MM/YYYY"
+                help="Data da última manutenção"
             ),
             "Próxima manutenção (calculada)": st.column_config.Column(
                 "Próxima Manutenção",
@@ -430,10 +430,6 @@ def show_add_device_page():
         with col2:
             modelo = st.text_input("Modelo")
             btu = st.number_input("BTU*", min_value=0, step=1000)
-            data_manutencao = st.date_input("Data da Manutenção", format="DD/MM/YYYY")
-            tecnico = st.text_input("Técnico Executante")
-            aprovacao = st.text_input("Aprovação Supervisor")
-            observacoes = st.text_area("Observações")
         
         st.markdown("(*) Campos obrigatórios")
         submit_button = st.form_submit_button("Adicionar Aparelho")
@@ -444,7 +440,6 @@ def show_add_device_page():
             elif not tag or not local or not setor or not marca or not btu:
                 st.error("Preencha todos os campos obrigatórios!")
             else:
-                proxima_manutencao = data_manutencao + timedelta(days=180) if data_manutencao else ''
                 new_row = {
                     'TAG': tag,
                     'Local': local,
@@ -452,11 +447,11 @@ def show_add_device_page():
                     'Marca': marca,
                     'Modelo': modelo,
                     'BTU': btu,
-                    'Data Manutenção': data_manutencao.strftime('%d/%m/%Y') if data_manutencao else '',
-                    'Técnico Executante': tecnico,
-                    'Aprovação Supervisor': aprovacao,
-                    'Próxima manutenção': proxima_manutencao.strftime('%d/%m/%Y') if data_manutencao else '',
-                    'Observações': observacoes
+                    'Data Manutenção': '',
+                    'Técnico Executante': '',
+                    'Aprovação Supervisor': '',
+                    'Próxima manutenção': '',
+                    'Observações': ''
                 }
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                 if save_data():
@@ -498,7 +493,7 @@ def show_edit_device_page():
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
+                    st.session_state.data.loc[st.session_state_data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
