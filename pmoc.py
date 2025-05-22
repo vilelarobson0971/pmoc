@@ -10,6 +10,7 @@ import requests
 import base64
 import io
 import time
+import json
 
 # Configuração inicial da página
 def setup_page():
@@ -19,9 +20,35 @@ def setup_page():
         layout="wide"
     )
 
+# Constantes
+CONFIG_FILE = "pmoc_config.json"
+REPO = "vilelarobson0971/pmoc"
+FILE_PATH = "pmoc.csv"
+
 # Funções para sincronização com GitHub
 def get_github_file_url(repo, file_path):
     return f"https://api.github.com/repos/{repo}/contents/{file_path}"
+
+def load_config():
+    """Carrega as configurações do arquivo JSON"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE) as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        st.error(f"Erro ao carregar configurações: {str(e)}")
+        return {}
+
+def save_config(config):
+    """Salva as configurações no arquivo JSON"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar configurações: {str(e)}")
+        return False
 
 def load_from_github(repo, file_path, token=None):
     try:
@@ -126,17 +153,16 @@ def init_data():
 # Função para salvar dados
 def save_data():
     try:
-        # Configurações do GitHub
-        repo = "vilelarobson0971/pmoc"
-        file_path = "pmoc.csv"
+        # Carrega configurações
+        config = load_config()
+        token = config.get('github_token', '')
         
-        # Verifica se o token está na sessão
-        if 'github_token' not in st.session_state or not st.session_state.github_token:
+        if not token:
             st.error("Token de acesso ao GitHub não configurado. Configure na página de Configuração.")
             return False
         
         # Salva no GitHub
-        if save_to_github(repo, file_path, st.session_state.data, st.session_state.github_token):
+        if save_to_github(REPO, FILE_PATH, st.session_state.data, token):
             st.success("Dados salvos no GitHub com sucesso!")
             return True
         else:
@@ -149,17 +175,16 @@ def save_data():
 # Carregar dados salvos
 def load_data():
     try:
-        # Configurações do GitHub
-        repo = "vilelarobson0971/pmoc"
-        file_path = "pmoc.csv"
+        # Carrega configurações
+        config = load_config()
+        token = config.get('github_token', '')
         
-        # Verifica se o token está na sessão
-        if 'github_token' not in st.session_state or not st.session_state.github_token:
+        if not token:
             st.warning("Token de acesso ao GitHub não configurado. Usando dados locais.")
             return
         
         # Carrega do GitHub
-        saved_data = load_from_github(repo, file_path, st.session_state.github_token)
+        saved_data = load_from_github(REPO, FILE_PATH, token)
         
         if saved_data is not None:
             if 'Observações' not in saved_data.columns:
@@ -493,7 +518,7 @@ def show_edit_device_page():
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
-                    st.session_state.data.loc[st.session_state_data['TAG'] == tag_to_edit, 'Local'] = local
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
@@ -598,23 +623,23 @@ def show_configuration_page():
     if not check_password():
         st.stop()
     
+    # Carrega configurações existentes
+    config = load_config()
+    
     # Configuração do Token do GitHub
     st.subheader("Configuração do GitHub")
-    st.text("github_pat_ 11BOAQEOY03WqoYaYst4z2_mG2dZCK8GOmXsnUzBTHXteNtsxhracvG7bg2VtYhPs7GLCWWIE6epvWVIPW")
-    
-    if 'github_token' not in st.session_state:
-        st.session_state.github_token = ""
     
     github_token = st.text_input(
         "Token de Acesso ao GitHub (obrigatório para sincronização)",
         type="password",
-        value=st.session_state.github_token,
+        value=config.get('github_token', ''),
         help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
     )
     
-    if st.button("Salvar Token"):
-        st.session_state.github_token = github_token
-        st.success("Token salvo com sucesso!")
+    if st.button("Salvar Configurações"):
+        config['github_token'] = github_token
+        if save_config(config):
+            st.success("Configurações salvas com sucesso!")
     
     # Sincronização manual
     st.subheader("Sincronização Manual")
@@ -622,14 +647,14 @@ def show_configuration_page():
     
     with col1:
         if st.button("Carregar Dados do GitHub"):
-            if st.session_state.github_token:
+            if github_token:
                 load_data()
             else:
                 st.error("Token de acesso não configurado!")
     
     with col2:
         if st.button("Salvar Dados no GitHub"):
-            if st.session_state.github_token:
+            if github_token:
                 if save_data():
                     st.success("Dados salvos no GitHub com sucesso!")
             else:
@@ -661,7 +686,11 @@ def main():
     try:
         setup_page()
         init_data()
-        load_data()
+        
+        # Carrega configurações e dados
+        config = load_config()
+        if config.get('github_token'):
+            load_data()
         
         st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
         st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
