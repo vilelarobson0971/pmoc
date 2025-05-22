@@ -682,30 +682,40 @@ def show_configuration_page():
     st.sidebar.text("2025")
 
 # Função principal
+
+# Função principal
 def main():
     try:
         setup_page()
-        init_data()
-        
-        # Carrega configurações e dados
+
+        # Carrega configurações
         config = load_config()
-        if config.get('github_token'):
-            load_data()
-        
+        token = config.get('github_token')
+
+        # Se houver token e dados ainda não estiverem carregados, carrega do GitHub
+        if token and 'data' not in st.session_state:
+            loaded = load_from_github(REPO, FILE_PATH, token)
+            if loaded is not None:
+                st.session_state.data = loaded
+            else:
+                init_data()
+        else:
+            init_data()
+
         st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
         st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
-        
+
         # Menu principal
         menu = st.sidebar.radio(
             "Menu Principal",
             ["Consulta", "Configuração"]
         )
-        
+
         if menu == "Consulta":
             show_consultation_page()
         elif menu == "Configuração":
             show_configuration_page()
-            
+
     except Exception as e:
         st.error(f"Ocorreu um erro inesperado: {str(e)}")
 
