@@ -10,6 +10,8 @@ import requests
 import base64
 import io
 import time
+import json
+from pathlib import Path
 
 # Configuração inicial da página
 def setup_page():
@@ -19,9 +21,35 @@ def setup_page():
         layout="wide"
     )
 
+# Constantes
+CONFIG_FILE = "pmoc_config.json"
+REPO = "vilelarobson0971/pmoc"
+FILE_PATH = "pmoc.csv"
+
 # Funções para sincronização com GitHub
 def get_github_file_url(repo, file_path):
     return f"https://api.github.com/repos/{repo}/contents/{file_path}"
+
+def load_config():
+    """Carrega as configurações do arquivo JSON"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE) as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        st.error(f"Erro ao carregar configurações: {str(e)}")
+        return {}
+
+def save_config(config):
+    """Salva as configurações no arquivo JSON"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar configurações: {str(e)}")
+        return False
 
 def load_from_github(repo, file_path, token=None):
     try:
@@ -85,6 +113,20 @@ def save_to_github(repo, file_path, data, token=None):
 # Inicialização dos dados
 def init_data():
     if 'data' not in st.session_state:
+        # Carrega configurações
+        config = load_config()
+        token = config.get('github_token', '')
+        
+        # Tenta carregar do GitHub se houver token
+        if token:
+            saved_data = load_from_github(REPO, FILE_PATH, token)
+            if saved_data is not None:
+                if 'Observações' not in saved_data.columns:
+                    saved_data['Observações'] = ''
+                st.session_state.data = saved_data
+                return
+        
+        # Se não conseguir carregar do GitHub, usa dados iniciais
         initial_data = {
             'TAG': list(range(1, 42)),
             'Local': ['Matriz']*20 + ['Filial']*13 + ['Matriz']*8,
@@ -126,17 +168,16 @@ def init_data():
 # Função para salvar dados
 def save_data():
     try:
-        # Configurações do GitHub
-        repo = "vilelarobson0971/pmoc"
-        file_path = "pmoc.csv"
+        # Carrega configurações
+        config = load_config()
+        token = config.get('github_token', '')
         
-        # Verifica se o token está na sessão
-        if 'github_token' not in st.session_state or not st.session_state.github_token:
+        if not token:
             st.error("Token de acesso ao GitHub não configurado. Configure na página de Configuração.")
             return False
         
         # Salva no GitHub
-        if save_to_github(repo, file_path, st.session_state.data, st.session_state.github_token):
+        if save_to_github(REPO, FILE_PATH, st.session_state.data, token):
             st.success("Dados salvos no GitHub com sucesso!")
             return True
         else:
@@ -145,138 +186,6 @@ def save_data():
     except Exception as e:
         st.error(f"Erro ao salvar dados: {str(e)}")
         return False
-
-# Carregar dados salvos
-def load_data():
-    try:
-        # Configurações do GitHub
-        repo = "vilelarobson0971/pmoc"
-        file_path = "pmoc.csv"
-        
-        # Verifica se o token está na sessão
-        if 'github_token' not in st.session_state or not st.session_state.github_token:
-            st.warning("Token de acesso ao GitHub não configurado. Usando dados locais.")
-            return
-        
-        # Carrega do GitHub
-        saved_data = load_from_github(repo, file_path, st.session_state.github_token)
-        
-        if saved_data is not None:
-            if 'Observações' not in saved_data.columns:
-                saved_data['Observações'] = ''
-            st.session_state.data = saved_data
-            st.success("Dados carregados do GitHub com sucesso!")
-        else:
-            st.warning("Arquivo no GitHub está vazio ou não existe. Usando dados locais.")
-            
-    except Exception as e:
-        st.error(f"Erro ao carregar dados: {str(e)}")
-
-# Gerar relatório PDF
-def generate_pdf_report(data, title="Relatório de Aparelhos"):
-    try:
-        pdf = FPDF(orientation='L')
-        pdf.add_page()
-        
-        # Configuração de fonte e cores
-        pdf.set_font("Arial", size=9)
-        pdf.set_text_color(0, 0, 0)
-        
-        # Ajuste do fuso horário
-        tz = pytz.timezone('America/Sao_Paulo')
-        now = datetime.now(tz)
-        
-        # Cabeçalho
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, "PMOC - Plano de Manutenção, Operação e Controle - AKR Brands", 0, 1, 'C')
-        pdf.ln(5)
-        
-        # Título do relatório
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, title, 0, 1, 'C')
-        pdf.ln(5)
-        
-        # Data e hora
-        pdf.set_font("Arial", 'I', 9)
-        pdf.cell(0, 10, f"Gerado em: {now.strftime('%d/%m/%Y %H:%M')}", 0, 1, 'R')
-        pdf.ln(8)
-        
-        # Configuração das colunas
-        col_widths = [12, 20, 30, 20, 25, 12, 25, 25, 25, 25, 40]
-        headers = [
-            "TAG", "Local", "Setor", "Marca", "Modelo", 
-            "BTU", "Última Manut.", "Próx. Manut.", 
-            "Técnico", "Aprovação", "Observações"
-        ]
-        
-        # Cabeçalho da tabela
-        pdf.set_font("Arial", 'B', 8)
-        for i, header in enumerate(headers):
-            pdf.cell(col_widths[i], 8, header, 1, 0, 'C')
-        pdf.ln()
-        
-        # Conteúdo da tabela
-        pdf.set_font("Arial", size=7)
-        for _, row in data.iterrows():
-            cells = [
-                str(row['TAG'])[:10] if pd.notna(row['TAG']) else '',
-                str(row['Local'])[:18] if pd.notna(row['Local']) else '',
-                str(row['Setor'])[:25] if pd.notna(row['Setor']) else '',
-                str(row['Marca'])[:18] if pd.notna(row['Marca']) else '',
-                str(row['Modelo'])[:22] if pd.notna(row['Modelo']) else '',
-                str(row['BTU'])[:10] if pd.notna(row['BTU']) else '',
-                str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '' else 'N/A',
-                str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '' else 'N/A',
-                str(row['Técnico Executante'])[:22] if pd.notna(row['Técnico Executante']) else '',
-                str(row['Aprovação Supervisor'])[:22] if pd.notna(row['Aprovação Supervisor']) else '',
-                str(row['Observações'])[:60] if pd.notna(row['Observações']) and str(row['Observações']) != '' else 'Nenhuma'
-            ]
-            
-            for i, cell in enumerate(cells):
-                pdf.cell(col_widths[i], 6, cell, 1, 0, 'C' if i in [0, 5, 6, 7] else 'L')
-            pdf.ln()
-        
-        # Estatísticas
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, "Estatísticas:", 0, 1)
-        pdf.set_font("Arial", size=10)
-        
-        total = len(data)
-        pdf.cell(0, 10, f"Total de Aparelhos: {total}", 0, 1)
-        
-        try:
-            next_maintenance = len(data[(data['Próxima manutenção'].notna()) & (data['Próxima manutenção'] != '')])
-            pdf.cell(0, 10, f"Com próxima manutenção agendada: {next_maintenance}", 0, 1)
-            
-            overdue_count = 0
-            for _, row in data.iterrows():
-                if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '':
-                    try:
-                        next_date = datetime.strptime(str(row['Próxima manutenção']), '%d/%m/%Y')
-                        if next_date < datetime.now():
-                            overdue_count += 1
-                    except:
-                        pass
-            
-            pdf.cell(0, 10, f"Manutenções atrasadas: {overdue_count}", 0, 1)
-        except Exception as e:
-            pdf.cell(0, 10, f"Erro ao calcular estatísticas: {str(e)[:50]}", 0, 1)
-        
-        # Rodapé
-        pdf.ln(15)
-        pdf.set_font("Arial", 'I', 8)
-        pdf.cell(0, 10, "Sistema PMOC - AKR Brands", 0, 0, 'C')
-        
-        # Gera o arquivo PDF
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        pdf.output(temp_file.name)
-        
-        return temp_file.name
-        
-    except Exception as e:
-        st.error(f"Erro ao gerar PDF: {str(e)}")
-        return None
 
 # Página de Consulta
 def show_consultation_page():
@@ -416,6 +325,112 @@ def show_consultation_page():
     st.sidebar.text("Versão 1.0")
     st.sidebar.text("2025")
 
+# Gerar relatório PDF
+def generate_pdf_report(data, title="Relatório de Aparelhos"):
+    try:
+        pdf = FPDF(orientation='L')
+        pdf.add_page()
+        
+        # Configuração de fonte e cores
+        pdf.set_font("Arial", size=9)
+        pdf.set_text_color(0, 0, 0)
+        
+        # Ajuste do fuso horário
+        tz = pytz.timezone('America/Sao_Paulo')
+        now = datetime.now(tz)
+        
+        # Cabeçalho
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(0, 10, "PMOC - Plano de Manutenção, Operação e Controle - AKR Brands", 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Título do relatório
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(0, 10, title, 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Data e hora
+        pdf.set_font("Arial", 'I', 9)
+        pdf.cell(0, 10, f"Gerado em: {now.strftime('%d/%m/%Y %H:%M')}", 0, 1, 'R')
+        pdf.ln(8)
+        
+        # Configuração das colunas
+        col_widths = [12, 20, 30, 20, 25, 12, 25, 25, 25, 25, 40]
+        headers = [
+            "TAG", "Local", "Setor", "Marca", "Modelo", 
+            "BTU", "Última Manut.", "Próx. Manut.", 
+            "Técnico", "Aprovação", "Observações"
+        ]
+        
+        # Cabeçalho da tabela
+        pdf.set_font("Arial", 'B', 8)
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths[i], 8, header, 1, 0, 'C')
+        pdf.ln()
+        
+        # Conteúdo da tabela
+        pdf.set_font("Arial", size=7)
+        for _, row in data.iterrows():
+            cells = [
+                str(row['TAG'])[:10] if pd.notna(row['TAG']) else '',
+                str(row['Local'])[:18] if pd.notna(row['Local']) else '',
+                str(row['Setor'])[:25] if pd.notna(row['Setor']) else '',
+                str(row['Marca'])[:18] if pd.notna(row['Marca']) else '',
+                str(row['Modelo'])[:22] if pd.notna(row['Modelo']) else '',
+                str(row['BTU'])[:10] if pd.notna(row['BTU']) else '',
+                str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '' else 'N/A',
+                str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '' else 'N/A',
+                str(row['Técnico Executante'])[:22] if pd.notna(row['Técnico Executante']) else '',
+                str(row['Aprovação Supervisor'])[:22] if pd.notna(row['Aprovação Supervisor']) else '',
+                str(row['Observações'])[:60] if pd.notna(row['Observações']) and str(row['Observações']) != '' else 'Nenhuma'
+            ]
+            
+            for i, cell in enumerate(cells):
+                pdf.cell(col_widths[i], 6, cell, 1, 0, 'C' if i in [0, 5, 6, 7] else 'L')
+            pdf.ln()
+        
+        # Estatísticas
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, "Estatísticas:", 0, 1)
+        pdf.set_font("Arial", size=10)
+        
+        total = len(data)
+        pdf.cell(0, 10, f"Total de Aparelhos: {total}", 0, 1)
+        
+        try:
+            next_maintenance = len(data[(data['Próxima manutenção'].notna()) & (data['Próxima manutenção'] != '')])
+            pdf.cell(0, 10, f"Com próxima manutenção agendada: {next_maintenance}", 0, 1)
+            
+            overdue_count = 0
+            for _, row in data.iterrows():
+                if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '':
+                    try:
+                        next_date = datetime.strptime(str(row['Próxima manutenção']), '%d/%m/%Y')
+                        if next_date < datetime.now():
+                            overdue_count += 1
+                    except:
+                        pass
+            
+            pdf.cell(0, 10, f"Manutenções atrasadas: {overdue_count}", 0, 1)
+        except Exception as e:
+            pdf.cell(0, 10, f"Erro ao calcular estatísticas: {str(e)[:50]}", 0, 1)
+        
+        # Rodapé
+        pdf.ln(15)
+        pdf.set_font("Arial", 'I', 8)
+        pdf.cell(0, 10, "Sistema PMOC - AKR Brands", 0, 0, 'C')
+        
+        # Gera o arquivo PDF
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        pdf.output(temp_file.name)
+        
+        return temp_file.name
+        
+    except Exception as e:
+        st.error(f"Erro ao gerar PDF: {str(e)}")
+        return None
+
 # Página de Adicionar Aparelho
 def show_add_device_page():
     st.header("Adicionar Novo Aparelho")
@@ -493,7 +508,7 @@ def show_edit_device_page():
                     st.error("Preencha todos os campos obrigatórios!")
                 else:
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
-                    st.session_state.data.loc[st.session_state_data['TAG'] == tag_to_edit, 'Local'] = local
+                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
                     st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
@@ -598,23 +613,31 @@ def show_configuration_page():
     if not check_password():
         st.stop()
     
+    # Carrega configurações existentes
+    config = load_config()
+    
     # Configuração do Token do GitHub
     st.subheader("Configuração do GitHub")
-    st.text("github_pat_ 11BOAQEOY03WqoYaYst4z2_mG2dZCK8GOmXsnUzBTHXteNtsxhracvG7bg2VtYhPs7GLCWWIE6epvWVIPW")
-    
-    if 'github_token' not in st.session_state:
-        st.session_state.github_token = ""
     
     github_token = st.text_input(
         "Token de Acesso ao GitHub (obrigatório para sincronização)",
         type="password",
-        value=st.session_state.github_token,
+        value=config.get('github_token', ''),
         help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
     )
     
-    if st.button("Salvar Token"):
-        st.session_state.github_token = github_token
-        st.success("Token salvo com sucesso!")
+    if st.button("Salvar Configurações"):
+        config['github_token'] = github_token
+        if save_config(config):
+            st.success("Configurações salvas com sucesso!")
+            # Tenta carregar os dados do GitHub após salvar o token
+            if github_token:
+                saved_data = load_from_github(REPO, FILE_PATH, github_token)
+                if saved_data is not None:
+                    if 'Observações' not in saved_data.columns:
+                        saved_data['Observações'] = ''
+                    st.session_state.data = saved_data
+                    st.success("Dados carregados do GitHub com sucesso!")
     
     # Sincronização manual
     st.subheader("Sincronização Manual")
@@ -622,14 +645,19 @@ def show_configuration_page():
     
     with col1:
         if st.button("Carregar Dados do GitHub"):
-            if st.session_state.github_token:
-                load_data()
+            if github_token:
+                saved_data = load_from_github(REPO, FILE_PATH, github_token)
+                if saved_data is not None:
+                    if 'Observações' not in saved_data.columns:
+                        saved_data['Observações'] = ''
+                    st.session_state.data = saved_data
+                    st.success("Dados carregados do GitHub com sucesso!")
             else:
                 st.error("Token de acesso não configurado!")
     
     with col2:
         if st.button("Salvar Dados no GitHub"):
-            if st.session_state.github_token:
+            if github_token:
                 if save_data():
                     st.success("Dados salvos no GitHub com sucesso!")
             else:
@@ -661,7 +689,6 @@ def main():
     try:
         setup_page()
         init_data()
-        load_data()
         
         st.title("❄️ PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
         st.markdown("Controle de manutenção preventiva de aparelhos de ar condicionado")
