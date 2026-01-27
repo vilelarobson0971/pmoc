@@ -563,16 +563,15 @@ def show_maintenance_page():
                 format="DD/MM/YYYY"
             )
             
-            # Seleção do técnico executante
-            tecnicos = ["Guilherme", "Ismael"]
-            tecnico_atual = aparelho_data['Técnico Executante'] if aparelho_data['Técnico Executante'] in tecnicos else tecnicos[0]
+            # Alteração 1: Adicionar opção de escolher entre Guilherme ou Ismael
             tecnico = st.selectbox(
                 "Técnico Executante*",
-                options=tecnicos,
-                index=tecnicos.index(tecnico_atual)
+                ["Guilherme", "Ismael"],
+                index=0 if aparelho_data['Técnico Executante'] == "Guilherme" else 1 if aparelho_data['Técnico Executante'] == "Ismael" else 0
             )
             
-            aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'] if aparelho_data['Aprovação Supervisor'] else "Ismael")
+            # Alteração 2: Alterar a aprovação para Ismael como valor padrão
+            aprovacao = st.text_input("Aprovação Supervisor", value="Ismael")
             observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
             if data_manutencao:
@@ -603,7 +602,7 @@ def show_maintenance_page():
 # Configuração de acesso
 def check_password():
     if 'password_correct' not in st.session_state:
-        st.session_state.password_correct = False
+               st.session_state.password_correct = False
     
     if not st.session_state.password_correct:
         password = st.text_input("Digite a senha de acesso:", type="password")
