@@ -562,17 +562,8 @@ def show_maintenance_page():
                 "Data da Manutenção*",
                 format="DD/MM/YYYY"
             )
-            
-            # Seleção do técnico executante
-            tecnicos = ["Guilherme", "Ismael"]
-            tecnico_atual = aparelho_data['Técnico Executante'] if aparelho_data['Técnico Executante'] in tecnicos else tecnicos[0]
-            tecnico = st.selectbox(
-                "Técnico Executante*",
-                options=tecnicos,
-                index=tecnicos.index(tecnico_atual)
-            )
-            
-            aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'] if aparelho_data['Aprovação Supervisor'] else "Ismael")
+            tecnico = st.text_input("Técnico Executante*", value=aparelho_data['Técnico Executante'])
+            aprovacao = st.text_input("Aprovação Supervisor", value=aparelho_data['Aprovação Supervisor'])
             observacoes = st.text_area("Observações", value=aparelho_data['Observações'])
             
             if data_manutencao:
