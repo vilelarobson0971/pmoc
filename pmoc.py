@@ -25,7 +25,6 @@ def setup_page():
 CONFIG_FILE = "pmoc_config.json"
 REPO = "vilelarobson0971/pmoc"
 FILE_PATH = "pmoc.csv"
-TIMEOUT = 10  # Timeout em segundos para requisições
 
 # Funções para sincronização com GitHub
 def get_github_file_url(repo, file_path):
@@ -60,7 +59,7 @@ def load_from_github(repo, file_path, token=None):
             "Accept": "application/vnd.github.v3+json"
         } if token else {}
         
-        response = requests.get(url, headers=headers, timeout=TIMEOUT)
+        response = requests.get(url, headers=headers)
         
         if response.status_code == 404:
             return None
@@ -77,12 +76,6 @@ def load_from_github(repo, file_path, token=None):
             return None
             
         return pd.read_csv(io.StringIO(decoded_content))
-    except requests.Timeout:
-        st.error("Tempo limite excedido ao carregar dados do GitHub. Tente novamente.")
-        return None
-    except requests.RequestException as e:
-        st.error(f"Erro de conexão ao carregar dados do GitHub: {str(e)}")
-        return None
     except Exception as e:
         st.error(f"Erro ao carregar dados do GitHub: {str(e)}")
         return None
@@ -96,7 +89,7 @@ def save_to_github(repo, file_path, data, token=None):
         } if token else {}
         
         # Verifica se o arquivo já existe para obter o SHA
-        response = requests.get(url, headers=headers, timeout=TIMEOUT)
+        response = requests.get(url, headers=headers)
         sha = response.json().get("sha", "") if response.status_code == 200 else ""
         
         # Converte DataFrame para CSV
@@ -109,16 +102,10 @@ def save_to_github(repo, file_path, data, token=None):
             "sha": sha if sha else None
         }
         
-        response = requests.put(url, json=payload, headers=headers, timeout=TIMEOUT)
+        response = requests.put(url, json=payload, headers=headers)
         response.raise_for_status()
         
         return True
-    except requests.Timeout:
-        st.error("Tempo limite excedido ao salvar dados no GitHub. Tente novamente.")
-        return False
-    except requests.RequestException as e:
-        st.error(f"Erro de conexão ao salvar dados no GitHub: {str(e)}")
-        return False
     except Exception as e:
         st.error(f"Erro ao salvar dados no GitHub: {str(e)}")
         return False
@@ -132,13 +119,12 @@ def init_data():
         
         # Tenta carregar do GitHub se houver token
         if token:
-            with st.spinner('Carregando dados do GitHub...'):
-                saved_data = load_from_github(REPO, FILE_PATH, token)
-                if saved_data is not None:
-                    if 'Observações' not in saved_data.columns:
-                        saved_data['Observações'] = ''
-                    st.session_state.data = saved_data
-                    return
+            saved_data = load_from_github(REPO, FILE_PATH, token)
+            if saved_data is not None:
+                if 'Observações' not in saved_data.columns:
+                    saved_data['Observações'] = ''
+                st.session_state.data = saved_data
+                return
         
         # Se não conseguir carregar do GitHub, usa dados iniciais
         initial_data = {
@@ -191,13 +177,12 @@ def save_data():
             return False
         
         # Salva no GitHub
-        with st.spinner('Salvando dados no GitHub...'):
-            if save_to_github(REPO, FILE_PATH, st.session_state.data, token):
-                st.success("Dados salvos no GitHub com sucesso!")
-                return True
-            else:
-                st.error("Falha ao salvar dados no GitHub.")
-                return False
+        if save_to_github(REPO, FILE_PATH, st.session_state.data, token):
+            st.success("Dados salvos no GitHub com sucesso!")
+            return True
+        else:
+            st.error("Falha ao salvar dados no GitHub.")
+            return False
     except Exception as e:
         st.error(f"Erro ao salvar dados: {str(e)}")
         return False
@@ -656,13 +641,12 @@ def show_configuration_page():
             st.success("Configurações salvas com sucesso!")
             # Tenta carregar os dados do GitHub após salvar o token
             if github_token:
-                with st.spinner('Carregando dados do GitHub...'):
-                    saved_data = load_from_github(REPO, FILE_PATH, github_token)
-                    if saved_data is not None:
-                        if 'Observações' not in saved_data.columns:
-                            saved_data['Observações'] = ''
-                        st.session_state.data = saved_data
-                        st.success("Dados carregados do GitHub com sucesso!")
+                saved_data = load_from_github(REPO, FILE_PATH, github_token)
+                if saved_data is not None:
+                    if 'Observações' not in saved_data.columns:
+                        saved_data['Observações'] = ''
+                    st.session_state.data = saved_data
+                    st.success("Dados carregados do GitHub com sucesso!")
     
     # Sincronização manual
     st.subheader("Sincronização Manual")
@@ -671,13 +655,12 @@ def show_configuration_page():
     with col1:
         if st.button("Carregar Dados do GitHub"):
             if github_token:
-                with st.spinner('Carregando dados do GitHub...'):
-                    saved_data = load_from_github(REPO, FILE_PATH, github_token)
-                    if saved_data is not None:
-                        if 'Observações' not in saved_data.columns:
-                            saved_data['Observações'] = ''
-                        st.session_state.data = saved_data
-                        st.success("Dados carregados do GitHub com sucesso!")
+                saved_data = load_from_github(REPO, FILE_PATH, github_token)
+                if saved_data is not None:
+                    if 'Observações' not in saved_data.columns:
+                        saved_data['Observações'] = ''
+                    st.session_state.data = saved_data
+                    st.success("Dados carregados do GitHub com sucesso!")
             else:
                 st.error("Token de acesso não configurado!")
     
