@@ -15,34 +15,34 @@ TAG,Local,Setor,Marca,Modelo,BTU,Data Manutenção,Técnico Executante,Aprovaç�
 14,Matriz,Diretoria,Springer,42TFCA,12000,27/01/2026,Guilherme,Robson,26/07/2026,Feito limpeza e higienização
 15,Matriz,Sala reunião principal,Springer,42MACB18S5,18000,27/01/2026,Guilherme,Robson,26/07/2026,Feito limpeza e higienização
 16,Matriz,Sala reunião principal,Springer,42MACB18S5,18000,27/01/2026,Guilherme,Robson,26/07/2026,Feito limpeza e higienização
-17,Matriz,Expedição - Recepção,Philco,Eco Inverter,18000,27/01/2026,nan,nan,26/07/2026,nan
-18,Matriz,Expedição - Sala Welder,Agratto,ACST12FR4-02,12000,27/01/2026,nan,nan,26/07/2026,nan
+17,Matriz,Expedição - Recepção,Philco,Eco Inverter,18000,27/01/2026,,,26/07/2026,
+18,Matriz,Expedição - Sala Welder,Agratto,ACST12FR4-02,12000,27/01/2026,,,26/07/2026,
 19,Matriz,Corte - Risco,COMFEE,42AFCD12F5,12000,27/01/2026,Guilherme,Guilherme,26/07/2026,Feito Limpeza E Higienização
 20,Matriz,Estoque - Sala Umberto,GREE,GWC12QC-D3NNB4D/I,12000,27/01/2026,Guilherme,Robson,26/07/2026,Feito limpeza e higienização
-21,Matriz,Laboratório - Sala ADM,GREE,GWC18AAD-D3NNA1D/I,18000,27/01/2026,Guilherme,Ismael Max,26/07/2026,nan
-22,Matriz,Laboratório - Sala ADM,GREE,GWC18AAD-D3NNA1D/I,18000,27/01/2026,Guilherme,Ismael Max,26/07/2026,nan
-23,Filial,Gerência,GREE,GWC12AAC-D3NNB4D/I,12000,02/02/2026,nan,nan,01/08/2026,nan
-24,Filial,Modelagem,GREE,GWC12AAC-D3NNB4D/I,12000,02/02/2026,nan,nan,01/08/2026,nan
-25,Filial,Inteligência do Produto,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-26,Filial,Estilo,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-27,Filial,Show Room,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-28,Filial,T.I.,Consul,,12000,02/02/2026,nan,nan,01/08/2026,nan
-29,Filial,PCP,Electrolux,VI18F,18000,02/02/2026,nan,nan,01/08/2026,nan
-30,Filial,PCP,GREE,GWC12QC-D3NNB4D/I,12000,02/02/2026,nan,nan,01/08/2026,nan
-31,Filial,Compras,Philco,Eco Inverter,12000,02/02/2026,nan,nan,01/08/2026,nan
-32,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-33,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-34,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
-35,Filial,Sala de Reunião,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,nan,nan,01/08/2026,nan
+21,Matriz,Laboratório - Sala ADM,GREE,GWC18AAD-D3NNA1D/I,18000,27/01/2026,Guilherme,Ismael Max,26/07/2026,
+22,Matriz,Laboratório - Sala ADM,GREE,GWC18AAD-D3NNA1D/I,18000,27/01/2026,Guilherme,Ismael Max,26/07/2026,
+23,Filial,Gerência,GREE,GWC12AAC-D3NNB4D/I,12000,02/02/2026,,,01/08/2026,
+24,Filial,Modelagem,GREE,GWC12AAC-D3NNB4D/I,12000,02/02/2026,,,01/08/2026,
+25,Filial,Inteligência do Produto,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+26,Filial,Estilo,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+27,Filial,Show Room,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+28,Filial,T.I.,Consul,,12000,02/02/2026,,,01/08/2026,
+29,Filial,PCP,Electrolux,VI18F,18000,02/02/2026,,,01/08/2026,
+30,Filial,PCP,GREE,GWC12QC-D3NNB4D/I,12000,02/02/2026,,,01/08/2026,
+31,Filial,Compras,Philco,Eco Inverter,12000,02/02/2026,,,01/08/2026,
+32,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+33,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+34,Filial,Refeitório,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
+35,Filial,Sala de Reunião,GREE,GWC24QE-D3NNB4D/I,24000,02/02/2026,,,01/08/2026,
 36,Matriz,Estúdio,Philco,,24000,02/02/2026,Guilherme,Robson,01/08/2026,Feito limpeza e higienização
 37,Matriz,Estúdio,Springer,,24000,02/02/2026,Guilherme,Robson,01/08/2026,Feito limpeza e higienização
-38,Matriz,Refeitório,Agratto,LCS24F-02,24000,02/02/2026,nan,nan,01/08/2026,nan
-39,Matriz,Refeitório,Agratto,LCS24F-02,24000,02/02/2026,nan,nan,01/08/2026,nan
+38,Matriz,Refeitório,Agratto,LCS24F-02,24000,02/02/2026,,,01/08/2026,
+39,Matriz,Refeitório,Agratto,LCS24F-02,24000,02/02/2026,,,01/08/2026,
 40,Matriz,e-Commerce,,,12000,02/02/2026,Guilherme,Robson,01/08/2026,Efetuado limpeza e higienização
-41,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-42,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-43,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-44,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-45,Matriz,Corte,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-46,Matriz,Corte,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
-47,Matriz,Depósito Tecidos,Clima,Climatizador,30000,02/02/2026,nan,nan,01/08/2026,nan
+41,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
+42,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
+43,Matriz,Expedição,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
+44,Matriz,Expedição,Clima,Climatizador,30000,27/01/2026,Guilherme,Ismael,26/07/2026,Realizado limpeza e higienização
+45,Matriz,Corte,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
+46,Matriz,Corte,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
+47,Matriz,Depósito Tecidos,Clima,Climatizador,30000,02/02/2026,,,01/08/2026,
