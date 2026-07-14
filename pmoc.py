@@ -13,16 +13,18 @@ st.title("🔧 Sistema PMOC - Cadastro e Manutenção de Splits")
 # 1. CONEXÃO COM O GOOGLE SHEETS via Streamlit Secrets
 @st.cache_resource
 def conectar_google_sheets():
-    # Carrega o JSON de credenciais guardado nas Secrets do Streamlit
-    creds_dict = json.loads(st.secrets["g_sheets_credentials"])
+    # O Streamlit já lê o bloco [gcp_service_account] como um dicionário pronto!
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    
     scope = [
         "https://googleapis.com",
         "https://googleapis.com"
     ]
+    
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
     
-    # Abre a planilha pelo ID fornecido nas Secrets
+    # Abre a planilha usando o ID que está no topo do Secrets
     sheet = client.open_by_key(st.secrets["spreadsheet_id"]).sheet1
     return sheet
 
