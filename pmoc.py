@@ -49,15 +49,9 @@ class AppConfig:
     timezone: str = 'America/Sao_Paulo'
     
     # Opções fixas
-    LOCATIONS: List[str] = ("Matriz", "Filial")
-    TECHNICIANS: List[str] = ("Guilherme", "Ismael")
+    LOCATIONS: tuple = ("Matriz", "Filial")
+    TECHNICIANS: tuple = ("Guilherme", "Ismael")
     DEFAULT_SUPERVISOR: str = "Ismael"
-    
-    # Cores para visualização
-    COLOR_PRIMARY: str = "#1E88E5"
-    COLOR_SUCCESS: str = "#43A047"
-    COLOR_WARNING: str = "#FFA000"
-    COLOR_DANGER: str = "#E53935"
 
 config = AppConfig()
 
@@ -97,7 +91,7 @@ class Device:
             sector=str(row['Setor']),
             brand=str(row['Marca']),
             model=str(row['Modelo']),
-            btu=int(row['BTU']) if pd.notna(row['BTU']) else 0,
+            btu=int(row['BTU']) if pd.notna(row['BTU']) and str(row['BTU']).strip() else 0,
             maintenance_date=str(row['Data Manutenção']) if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '' else None,
             technician=str(row['Técnico Executante']) if pd.notna(row['Técnico Executante']) else "",
             supervisor=str(row['Aprovação Supervisor']) if pd.notna(row['Aprovação Supervisor']) else "",
@@ -554,18 +548,30 @@ class UIComponents:
         with col3:
             st.write(f"**BTU:** {device.btu}")
             status = device.get_maintenance_status()
-            status_colors = {
-                MaintenanceStatus.UP_TO_DATE: "🟢",
-                MaintenanceStatus.DUE_SOON: "🟡",
-                MaintenanceStatus.OVERDUE: "🔴",
-                MaintenanceStatus.NOT_SCHEDULED: "⚪",
-                MaintenanceStatus.INVALID: "❌"
+            status_icons = {
+                MaintenanceStatus.UP_TO_DATE: "✅",
+                MaintenanceStatus.DUE_SOON: "⚠️",
+                MaintenanceStatus.OVERDUE: "❌",
+                MaintenanceStatus.NOT_SCHEDULED: "⏳",
+                MaintenanceStatus.INVALID: "❓"
             }
-            st.write(f"**Status:** {status_colors.get(status, '')} {status.value}")
+            status_colors = {
+                MaintenanceStatus.UP_TO_DATE: "green",
+                MaintenanceStatus.DUE_SOON: "orange",
+                MaintenanceStatus.OVERDUE: "red",
+                MaintenanceStatus.NOT_SCHEDULED: "gray",
+                MaintenanceStatus.INVALID: "red"
+            }
+            st.write(f"**Status:** {status_icons.get(status, '')} {status.value}")
 
 # ============================================================
 # PÁGINAS DA APLICAÇÃO
 # ============================================================
+
+def save_data() -> bool:
+    """Função de conveniência para salvar dados"""
+    state_manager = StateManager()
+    return state_manager.save()
 
 def show_consultation_page():
     """Página de consulta de aparelhos"""
@@ -664,12 +670,14 @@ def show_consultation_page():
     )
     
     # Exportar CSV
-    st.download_button(
-        label="📥 Exportar para CSV",
-        data=st.session_state.data.to_csv(index=False).encode('utf-8'),
-        file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
-        mime='text/csv'
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="📥 Exportar para CSV",
+            data=st.session_state.data.to_csv(index=False).encode('utf-8'),
+            file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
+            mime='text/csv'
+        )
     
     # Estatísticas
     st.subheader("📈 Estatísticas")
@@ -820,10 +828,15 @@ def show_remove_device_page():
         st.warning("⚠️ Você está prestes a remover permanentemente este aparelho:")
         UIComponents.show_device_details(device)
         
-        if st.button("Confirmar Remoção", type="primary"):
-            st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
-            if save_data():
-                st.success(f"✅ Aparelho TAG {tag_to_remove} removido com sucesso!")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Confirmar Remoção", type="primary"):
+                st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
+                if save_data():
+                    st.success(f"✅ Aparelho TAG {tag_to_remove} removido com sucesso!")
+                    st.rerun()
+        with col2:
+            if st.button("❌ Cancelar"):
                 st.rerun()
 
 def show_maintenance_page():
@@ -985,11 +998,6 @@ def show_configuration_page():
 # ============================================================
 # FUNÇÃO PRINCIPAL
 # ============================================================
-
-def save_data() -> bool:
-    """Função de conveniência para salvar dados"""
-    state_manager = StateManager()
-    return state_manager.save()
 
 def main():
     """Função principal da aplicação"""
