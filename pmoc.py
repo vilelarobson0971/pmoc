@@ -1,7 +1,7 @@
 """
 PMOC - Plano de Manutenção, Operação e Controle
 Sistema de gerenciamento de manutenção de aparelhos de ar condicionado
-Versão: 2.0
+Versão: 2.1
 """
 
 import streamlit as st
@@ -16,7 +16,7 @@ import base64
 import io
 import json
 import logging
-from typing import Optional, Dict, Any, List, Tuple
+import traceback
 
 # Configuração de logging
 logging.basicConfig(
@@ -185,26 +185,30 @@ def create_initial_data():
     df['BTU'] = df['BTU'].astype(str)
     return df
 
-def init_data():
-    """Inicializa os dados da aplicação"""
-    if 'data' not in st.session_state:
-        # Carrega configurações
+def ensure_data_initialized():
+    """Garante que os dados estejam inicializados no session_state"""
+    if 'data' not in st.session_state or st.session_state.data is None:
+        # Tenta carregar do GitHub
         config_data = load_config()
         token = config_data.get('github_token', '')
         
-        # Tenta carregar do GitHub
         if token:
             saved_data = load_from_github(token)
             if saved_data is not None:
                 st.session_state.data = saved_data
                 return
-        
-        # Dados iniciais
+    
+    # Se ainda não tem dados, cria dados iniciais
+    if 'data' not in st.session_state or st.session_state.data is None:
         st.session_state.data = create_initial_data()
 
 def save_data():
     """Salva os dados atuais"""
     try:
+        if 'data' not in st.session_state or st.session_state.data is None:
+            st.error("Não há dados para salvar")
+            return False
+            
         config_data = load_config()
         token = config_data.get('github_token', '')
         
@@ -213,7 +217,6 @@ def save_data():
             return False
         
         if save_to_github(st.session_state.data, token):
-            st.success("Dados salvos no GitHub com sucesso!")
             return True
         else:
             st.error("Falha ao salvar dados no GitHub.")
@@ -230,11 +233,11 @@ def save_data():
 
 def generate_pdf_report(data, title="Relatório de Aparelhos"):
     """Gera relatório PDF dos aparelhos"""
-    if data.empty:
-        st.warning("Não há dados para gerar o relatório")
-        return None
-    
     try:
+        if data is None or data.empty:
+            st.warning("Não há dados para gerar o relatório")
+            return None
+        
         pdf = FPDF(orientation='L')
         pdf.add_page()
         
@@ -335,6 +338,7 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
         
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {str(e)}")
+        logger.error(traceback.format_exc())
         st.error(f"Erro ao gerar PDF: {str(e)}")
         return None
 
@@ -344,384 +348,448 @@ def generate_pdf_report(data, title="Relatório de Aparelhos"):
 
 def show_consultation_page():
     """Página de consulta de aparelhos"""
-    st.header("📊 Consulta de Aparelhos")
-    
-    # Filtros
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        local_filter = st.selectbox("Local", ["Todos"] + list(st.session_state.data['Local'].unique()))
-    with col2:
-        setor_filter = st.selectbox("Setor", ["Todos"] + list(st.session_state.data['Setor'].unique()))
-    with col3:
-        marca_filter = st.selectbox("Marca", ["Todos"] + list(st.session_state.data['Marca'].unique()))
-    
-    # Aplicar filtros
-    filtered_data = st.session_state.data.copy()
-    if local_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Local'] == local_filter]
-    if setor_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Setor'] == setor_filter]
-    if marca_filter != "Todos":
-        filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
-    
-    # Calcular próxima manutenção
-    display_data = filtered_data.copy()
-    
-    def calculate_next_maintenance(row):
-        if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '':
-            try:
-                maintenance_date = datetime.strptime(str(row['Data Manutenção']), '%d/%m/%Y')
-                next_maintenance = maintenance_date + timedelta(days=MAINTENANCE_INTERVAL_DAYS)
-                return next_maintenance.strftime('%d/%m/%Y')
-            except ValueError:
-                return 'data inválida'
-        return 'aguardando programação'
-    
-    display_data['Próxima manutenção (calculada)'] = display_data.apply(calculate_next_maintenance, axis=1)
-    
-    # Gerar relatório
-    st.subheader("📄 Gerar Relatório")
-    selected_tags = st.multiselect(
-        "Selecione os aparelhos para incluir no relatório (deixe vazio para todos)",
-        options=filtered_data['TAG'].unique()
-    )
-    
-    if st.button("Gerar Relatório PDF", type="primary"):
-        if selected_tags:
-            report_data = filtered_data[filtered_data['TAG'].isin(selected_tags)]
-            title = f"Relatório de Aparelhos Selecionados ({len(report_data)} itens)"
-        else:
-            report_data = filtered_data
-            title = f"Relatório Completo de Aparelhos ({len(report_data)} itens)"
+    try:
+        st.header("📊 Consulta de Aparelhos")
         
-        pdf_file = generate_pdf_report(report_data, title)
+        # Garantir que os dados existem
+        ensure_data_initialized()
         
-        if pdf_file:
-            with open(pdf_file, "rb") as f:
-                pdf_bytes = f.read()
-            
-            st.download_button(
-                label="📥 Baixar Relatório PDF",
-                data=pdf_bytes,
-                file_name=f"relatorio_pmoc_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                mime="application/pdf"
-            )
-            
-            os.unlink(pdf_file)
-    
-    # Exibir dados
-    columns_to_show = [
-        "TAG", "Local", "Setor", "Marca", "Modelo", 
-        "BTU", "Data Manutenção", "Próxima manutenção (calculada)",
-        "Técnico Executante", "Aprovação Supervisor", "Observações"
-    ]
-    
-    st.dataframe(
-        display_data[columns_to_show],
-        use_container_width=True,
-        hide_index=True
-    )
-    
-    # Exportar CSV
-    st.download_button(
-        label="📥 Exportar para CSV",
-        data=st.session_state.data.to_csv(index=False).encode('utf-8'),
-        file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
-        mime='text/csv'
-    )
-    
-    # Estatísticas
-    st.subheader("📈 Estatísticas")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total de Aparelhos", len(filtered_data))
-    with col2:
-        with_maintenance = len(filtered_data[filtered_data['Data Manutenção'] != ''])
-        st.metric("Com manutenção registrada", with_maintenance)
-    with col3:
-        try:
-            overdue_count = 0
-            for _, row in display_data.iterrows():
-                if row['Próxima manutenção (calculada)'] not in ['aguardando programação', 'data inválida']:
+        if st.session_state.data is None or st.session_state.data.empty:
+            st.warning("Nenhum dado disponível. Adicione aparelhos ou carregue do GitHub.")
+            return
+        
+        # Filtros
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            local_filter = st.selectbox("Local", ["Todos"] + list(st.session_state.data['Local'].unique()))
+        with col2:
+            setor_filter = st.selectbox("Setor", ["Todos"] + list(st.session_state.data['Setor'].unique()))
+        with col3:
+            marca_filter = st.selectbox("Marca", ["Todos"] + list(st.session_state.data['Marca'].unique()))
+        
+        # Aplicar filtros
+        filtered_data = st.session_state.data.copy()
+        if local_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Local'] == local_filter]
+        if setor_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Setor'] == setor_filter]
+        if marca_filter != "Todos":
+            filtered_data = filtered_data[filtered_data['Marca'] == marca_filter]
+        
+        # Calcular próxima manutenção
+        display_data = filtered_data.copy()
+        
+        def calculate_next_maintenance(row):
+            if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '':
+                try:
+                    maintenance_date = datetime.strptime(str(row['Data Manutenção']), '%d/%m/%Y')
+                    next_maintenance = maintenance_date + timedelta(days=MAINTENANCE_INTERVAL_DAYS)
+                    return next_maintenance.strftime('%d/%m/%Y')
+                except ValueError:
+                    return 'data inválida'
+            return 'aguardando programação'
+        
+        display_data['Próxima manutenção (calculada)'] = display_data.apply(calculate_next_maintenance, axis=1)
+        
+        # Gerar relatório
+        st.subheader("📄 Gerar Relatório")
+        selected_tags = st.multiselect(
+            "Selecione os aparelhos para incluir no relatório (deixe vazio para todos)",
+            options=filtered_data['TAG'].unique()
+        )
+        
+        if st.button("Gerar Relatório PDF", type="primary"):
+            with st.spinner("Gerando relatório PDF..."):
+                if selected_tags:
+                    report_data = filtered_data[filtered_data['TAG'].isin(selected_tags)]
+                    title = f"Relatório de Aparelhos Selecionados ({len(report_data)} itens)"
+                else:
+                    report_data = filtered_data
+                    title = f"Relatório Completo de Aparelhos ({len(report_data)} itens)"
+                
+                pdf_file = generate_pdf_report(report_data, title)
+                
+                if pdf_file:
                     try:
-                        next_date = datetime.strptime(row['Próxima manutenção (calculada)'], '%d/%m/%Y')
-                        if next_date < datetime.now():
-                            overdue_count += 1
-                    except:
-                        pass
-            st.metric("Manutenções Atrasadas", overdue_count)
-        except Exception as e:
-            st.error(f"Erro ao calcular atrasos: {str(e)}")
-            st.metric("Manutenções Atrasadas", 0)
+                        with open(pdf_file, "rb") as f:
+                            pdf_bytes = f.read()
+                        
+                        st.download_button(
+                            label="📥 Baixar Relatório PDF",
+                            data=pdf_bytes,
+                            file_name=f"relatorio_pmoc_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                            mime="application/pdf"
+                        )
+                    finally:
+                        if os.path.exists(pdf_file):
+                            os.unlink(pdf_file)
+        
+        # Exibir dados
+        columns_to_show = [
+            "TAG", "Local", "Setor", "Marca", "Modelo", 
+            "BTU", "Data Manutenção", "Próxima manutenção (calculada)",
+            "Técnico Executante", "Aprovação Supervisor", "Observações"
+        ]
+        
+        st.dataframe(
+            display_data[columns_to_show],
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Exportar CSV
+        st.download_button(
+            label="📥 Exportar para CSV",
+            data=st.session_state.data.to_csv(index=False).encode('utf-8'),
+            file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
+            mime='text/csv'
+        )
+        
+        # Estatísticas
+        st.subheader("📈 Estatísticas")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total de Aparelhos", len(filtered_data))
+        with col2:
+            with_maintenance = len(filtered_data[filtered_data['Data Manutenção'] != ''])
+            st.metric("Com manutenção registrada", with_maintenance)
+        with col3:
+            try:
+                overdue_count = 0
+                for _, row in display_data.iterrows():
+                    if row['Próxima manutenção (calculada)'] not in ['aguardando programação', 'data inválida']:
+                        try:
+                            next_date = datetime.strptime(row['Próxima manutenção (calculada)'], '%d/%m/%Y')
+                            if next_date < datetime.now():
+                                overdue_count += 1
+                        except:
+                            pass
+                st.metric("Manutenções Atrasadas", overdue_count)
+            except Exception as e:
+                st.error(f"Erro ao calcular atrasos: {str(e)}")
+                st.metric("Manutenções Atrasadas", 0)
+                
+    except Exception as e:
+        st.error(f"Erro ao carregar consulta: {str(e)}")
+        logger.error(f"Erro em show_consultation_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def show_add_device_page():
     """Página para adicionar aparelho"""
-    st.header("➕ Adicionar Novo Aparelho")
-    
-    with st.form("add_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            tag = st.number_input("TAG*", min_value=1, step=1)
-            local = st.selectbox("Local*", LOCATIONS)
-            setor = st.text_input("Setor*")
-            marca = st.text_input("Marca*")
-        with col2:
-            modelo = st.text_input("Modelo")
-            btu = st.number_input("BTU*", min_value=0, step=1000)
+    try:
+        st.header("➕ Adicionar Novo Aparelho")
         
-        st.markdown("(*) Campos obrigatórios")
-        submitted = st.form_submit_button("Adicionar Aparelho", type="primary")
+        ensure_data_initialized()
         
-        if submitted:
-            if tag in st.session_state.data['TAG'].values:
-                st.error("❌ Já existe um aparelho com esta TAG!")
-            elif not setor or not marca:
-                st.error("❌ Preencha todos os campos obrigatórios!")
-            else:
-                new_row = {
-                    'TAG': tag,
-                    'Local': local,
-                    'Setor': setor,
-                    'Marca': marca,
-                    'Modelo': modelo,
-                    'BTU': str(btu),
-                    'Data Manutenção': '',
-                    'Técnico Executante': '',
-                    'Aprovação Supervisor': '',
-                    'Próxima manutenção': '',
-                    'Observações': ''
-                }
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                if save_data():
-                    st.success(f"✅ Aparelho TAG {tag} adicionado com sucesso!")
-                    st.balloons()
-                    st.rerun()
+        with st.form("add_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                tag = st.number_input("TAG*", min_value=1, step=1)
+                local = st.selectbox("Local*", LOCATIONS)
+                setor = st.text_input("Setor*")
+                marca = st.text_input("Marca*")
+            with col2:
+                modelo = st.text_input("Modelo")
+                btu = st.number_input("BTU*", min_value=0, step=1000)
+            
+            st.markdown("(*) Campos obrigatórios")
+            submitted = st.form_submit_button("Adicionar Aparelho", type="primary")
+            
+            if submitted:
+                if st.session_state.data is not None and tag in st.session_state.data['TAG'].values:
+                    st.error("❌ Já existe um aparelho com esta TAG!")
+                elif not setor or not marca:
+                    st.error("❌ Preencha todos os campos obrigatórios!")
+                else:
+                    new_row = {
+                        'TAG': tag,
+                        'Local': local,
+                        'Setor': setor,
+                        'Marca': marca,
+                        'Modelo': modelo,
+                        'BTU': str(btu),
+                        'Data Manutenção': '',
+                        'Técnico Executante': '',
+                        'Aprovação Supervisor': '',
+                        'Próxima manutenção': '',
+                        'Observações': ''
+                    }
+                    
+                    if st.session_state.data is None:
+                        st.session_state.data = pd.DataFrame([new_row])
+                    else:
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                    
+                    if save_data():
+                        st.success(f"✅ Aparelho TAG {tag} adicionado com sucesso!")
+                        st.balloons()
+                        st.rerun()
+                    
+    except Exception as e:
+        st.error(f"Erro ao adicionar aparelho: {str(e)}")
+        logger.error(f"Erro em show_add_device_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def show_edit_device_page():
     """Página para editar aparelho"""
-    st.header("✏️ Editar Aparelho")
-    
-    if st.session_state.data.empty:
-        st.warning("Não há aparelhos cadastrados para editar")
-        return
-    
-    tag_to_edit = st.selectbox(
-        "Selecione a TAG do aparelho a editar",
-        st.session_state.data['TAG'].unique()
-    )
-    
-    if tag_to_edit:
-        row = st.session_state.data[st.session_state.data['TAG'] == tag_to_edit].iloc[0]
+    try:
+        st.header("✏️ Editar Aparelho")
         
-        with st.form("edit_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                tag = st.number_input("TAG*", value=int(row['TAG']), min_value=1, step=1)
-                local = st.selectbox("Local*", LOCATIONS, index=LOCATIONS.index(row['Local']))
-                setor = st.text_input("Setor*", value=row['Setor'])
-                marca = st.text_input("Marca*", value=row['Marca'])
-            with col2:
-                modelo = st.text_input("Modelo", value=row['Modelo'])
-                btu = st.number_input("BTU*", value=int(row['BTU']) if str(row['BTU']).isdigit() else 0, min_value=0, step=1000)
+        ensure_data_initialized()
+        
+        if st.session_state.data is None or st.session_state.data.empty:
+            st.warning("Não há aparelhos cadastrados para editar")
+            return
+        
+        tag_to_edit = st.selectbox(
+            "Selecione a TAG do aparelho a editar",
+            st.session_state.data['TAG'].unique()
+        )
+        
+        if tag_to_edit:
+            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_edit].iloc[0]
             
-            st.markdown("(*) Campos obrigatórios")
-            submitted = st.form_submit_button("Atualizar Aparelho", type="primary")
-            
-            if submitted:
-                if not setor or not marca:
-                    st.error("❌ Preencha todos os campos obrigatórios!")
-                else:
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = str(btu)
-                    
-                    if save_data():
-                        st.success(f"✅ Aparelho TAG {tag} atualizado com sucesso!")
-                        st.rerun()
+            with st.form("edit_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    tag = st.number_input("TAG*", value=int(row['TAG']), min_value=1, step=1)
+                    local = st.selectbox("Local*", LOCATIONS, index=LOCATIONS.index(row['Local']))
+                    setor = st.text_input("Setor*", value=row['Setor'])
+                    marca = st.text_input("Marca*", value=row['Marca'])
+                with col2:
+                    modelo = st.text_input("Modelo", value=row['Modelo'])
+                    btu_value = int(row['BTU']) if str(row['BTU']).isdigit() else 0
+                    btu = st.number_input("BTU*", value=btu_value, min_value=0, step=1000)
+                
+                st.markdown("(*) Campos obrigatórios")
+                submitted = st.form_submit_button("Atualizar Aparelho", type="primary")
+                
+                if submitted:
+                    if not setor or not marca:
+                        st.error("❌ Preencha todos os campos obrigatórios!")
+                    else:
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'TAG'] = tag
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Local'] = local
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Setor'] = setor
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Marca'] = marca
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = str(btu)
+                        
+                        if save_data():
+                            st.success(f"✅ Aparelho TAG {tag} atualizado com sucesso!")
+                            st.rerun()
+                            
+    except Exception as e:
+        st.error(f"Erro ao editar aparelho: {str(e)}")
+        logger.error(f"Erro em show_edit_device_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def show_remove_device_page():
     """Página para remover aparelho"""
-    st.header("🗑️ Remover Aparelho")
-    
-    if st.session_state.data.empty:
-        st.warning("Não há aparelhos cadastrados para remover")
-        return
-    
-    tag_to_remove = st.selectbox(
-        "Selecione a TAG do aparelho a remover",
-        st.session_state.data['TAG'].unique()
-    )
-    
-    if tag_to_remove:
-        row = st.session_state.data[st.session_state.data['TAG'] == tag_to_remove].iloc[0]
+    try:
+        st.header("🗑️ Remover Aparelho")
         
-        st.warning(f"⚠️ Você está prestes a remover permanentemente o aparelho:")
-        st.write(f"**TAG:** {tag_to_remove}")
-        st.write(f"**Local:** {row['Local']}")
-        st.write(f"**Setor:** {row['Setor']}")
-        st.write(f"**Marca/Modelo:** {row['Marca']} {row['Modelo']}")
+        ensure_data_initialized()
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ Confirmar Remoção", type="primary"):
-                st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
-                if save_data():
-                    st.success(f"✅ Aparelho TAG {tag_to_remove} removido com sucesso!")
+        if st.session_state.data is None or st.session_state.data.empty:
+            st.warning("Não há aparelhos cadastrados para remover")
+            return
+        
+        tag_to_remove = st.selectbox(
+            "Selecione a TAG do aparelho a remover",
+            st.session_state.data['TAG'].unique()
+        )
+        
+        if tag_to_remove:
+            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_remove].iloc[0]
+            
+            st.warning(f"⚠️ Você está prestes a remover permanentemente o aparelho:")
+            st.write(f"**TAG:** {tag_to_remove}")
+            st.write(f"**Local:** {row['Local']}")
+            st.write(f"**Setor:** {row['Setor']}")
+            st.write(f"**Marca/Modelo:** {row['Marca']} {row['Modelo']}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Confirmar Remoção", type="primary"):
+                    st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
+                    if save_data():
+                        st.success(f"✅ Aparelho TAG {tag_to_remove} removido com sucesso!")
+                        st.rerun()
+            with col2:
+                if st.button("❌ Cancelar"):
                     st.rerun()
-        with col2:
-            if st.button("❌ Cancelar"):
-                st.rerun()
+                    
+    except Exception as e:
+        st.error(f"Erro ao remover aparelho: {str(e)}")
+        logger.error(f"Erro em show_remove_device_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def show_maintenance_page():
     """Página para registrar manutenção"""
-    st.header("🔧 Registrar Manutenção")
-    
-    if st.session_state.data.empty:
-        st.warning("Não há aparelhos cadastrados para registrar manutenção")
-        return
-    
-    tag_to_maintain = st.selectbox(
-        "Selecione a TAG do aparelho para registrar manutenção",
-        st.session_state.data['TAG'].unique()
-    )
-    
-    if tag_to_maintain:
-        row = st.session_state.data[st.session_state.data['TAG'] == tag_to_maintain].iloc[0]
+    try:
+        st.header("🔧 Registrar Manutenção")
         
-        st.write(f"**Aparelho selecionado:** TAG {tag_to_maintain} - {row['Marca']} {row['Modelo']}")
-        st.write(f"**Localização:** {row['Local']} - {row['Setor']}")
+        ensure_data_initialized()
         
-        with st.form("maintenance_form"):
-            maintenance_date = st.date_input(
-                "Data da Manutenção*",
-                format="DD/MM/YYYY"
-            )
+        if st.session_state.data is None or st.session_state.data.empty:
+            st.warning("Não há aparelhos cadastrados para registrar manutenção")
+            return
+        
+        tag_to_maintain = st.selectbox(
+            "Selecione a TAG do aparelho para registrar manutenção",
+            st.session_state.data['TAG'].unique()
+        )
+        
+        if tag_to_maintain:
+            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_maintain].iloc[0]
             
-            technician = st.selectbox(
-                "Técnico Executante*",
-                TECHNICIANS,
-                index=0
-            )
+            st.write(f"**Aparelho selecionado:** TAG {tag_to_maintain} - {row['Marca']} {row['Modelo']}")
+            st.write(f"**Localização:** {row['Local']} - {row['Setor']}")
             
-            supervisor = st.text_input("Aprovação Supervisor", value=DEFAULT_SUPERVISOR)
-            observations = st.text_area("Observações", value=row['Observações'])
-            
-            if maintenance_date:
-                next_maintenance = maintenance_date + timedelta(days=MAINTENANCE_INTERVAL_DAYS)
-                st.info(f"📅 Próxima manutenção será agendada para: **{next_maintenance.strftime('%d/%m/%Y')}**")
-            
-            st.markdown("(*) Campos obrigatórios")
-            submitted = st.form_submit_button("Registrar Manutenção", type="primary")
-            
-            if submitted:
-                if not maintenance_date or not technician:
-                    st.error("❌ Preencha todos os campos obrigatórios!")
-                else:
+            with st.form("maintenance_form"):
+                maintenance_date = st.date_input(
+                    "Data da Manutenção*",
+                    format="DD/MM/YYYY"
+                )
+                
+                technician = st.selectbox(
+                    "Técnico Executante*",
+                    TECHNICIANS,
+                    index=0
+                )
+                
+                supervisor = st.text_input("Aprovação Supervisor", value=DEFAULT_SUPERVISOR)
+                observations = st.text_area("Observações", value=row['Observações'])
+                
+                if maintenance_date:
                     next_maintenance = maintenance_date + timedelta(days=MAINTENANCE_INTERVAL_DAYS)
-                    
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = maintenance_date.strftime('%d/%m/%Y')
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = technician
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = supervisor
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Próxima manutenção'] = next_maintenance.strftime('%d/%m/%Y')
-                    st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Observações'] = observations
-                    
-                    if save_data():
-                        st.success(f"✅ Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
-                        st.info(f"📅 Próxima manutenção: {next_maintenance.strftime('%d/%m/%Y')}")
-                        st.balloons()
-                        st.rerun()
+                    st.info(f"📅 Próxima manutenção será agendada para: **{next_maintenance.strftime('%d/%m/%Y')}**")
+                
+                st.markdown("(*) Campos obrigatórios")
+                submitted = st.form_submit_button("Registrar Manutenção", type="primary")
+                
+                if submitted:
+                    if not maintenance_date or not technician:
+                        st.error("❌ Preencha todos os campos obrigatórios!")
+                    else:
+                        next_maintenance = maintenance_date + timedelta(days=MAINTENANCE_INTERVAL_DAYS)
+                        
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Data Manutenção'] = maintenance_date.strftime('%d/%m/%Y')
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Técnico Executante'] = technician
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Aprovação Supervisor'] = supervisor
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Próxima manutenção'] = next_maintenance.strftime('%d/%m/%Y')
+                        st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Observações'] = observations
+                        
+                        if save_data():
+                            st.success(f"✅ Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
+                            st.info(f"📅 Próxima manutenção: {next_maintenance.strftime('%d/%m/%Y')}")
+                            st.balloons()
+                            st.rerun()
+                            
+    except Exception as e:
+        st.error(f"Erro ao registrar manutenção: {str(e)}")
+        logger.error(f"Erro em show_maintenance_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def check_password():
     """Verifica a senha de acesso"""
-    if 'password_correct' not in st.session_state:
-        st.session_state.password_correct = False
-    
-    if not st.session_state.password_correct:
-        password = st.text_input("🔑 Digite a senha de acesso:", type="password")
-        if password == "king@2025":
-            st.session_state.password_correct = True
-            st.rerun()
-        elif password != "":
-            st.error("❌ Senha incorreta!")
+    try:
+        if 'password_correct' not in st.session_state:
+            st.session_state.password_correct = False
+        
+        if not st.session_state.password_correct:
+            password = st.text_input("🔑 Digite a senha de acesso:", type="password")
+            if password == "king@2025":
+                st.session_state.password_correct = True
+                st.rerun()
+            elif password != "":
+                st.error("❌ Senha incorreta!")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Erro em check_password: {str(e)}")
         return False
-    return True
 
 def show_configuration_page():
     """Página de configuração"""
-    st.header("⚙️ Configuração")
-    
-    if not check_password():
-        st.stop()
-    
-    # Carrega configurações
-    config_data = load_config()
-    
-    # Configuração do GitHub
-    st.subheader("🔐 Configuração do GitHub")
-    
-    github_token = st.text_input(
-        "Token de Acesso ao GitHub",
-        type="password",
-        value=config_data.get('github_token', ''),
-        help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
-    )
-    
-    if st.button("💾 Salvar Configurações", type="primary"):
-        config_data['github_token'] = github_token
-        if save_config(config_data):
-            st.success("✅ Configurações salvas com sucesso!")
-            if github_token:
-                saved_data = load_from_github(github_token)
-                if saved_data is not None:
-                    st.session_state.data = saved_data
-                    st.success("✅ Dados carregados do GitHub com sucesso!")
-    
-    # Sincronização
-    st.subheader("🔄 Sincronização Manual")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("📥 Carregar do GitHub"):
-            if github_token:
-                saved_data = load_from_github(github_token)
-                if saved_data is not None:
-                    st.session_state.data = saved_data
-                    st.success("✅ Dados carregados do GitHub com sucesso!")
+    try:
+        st.header("⚙️ Configuração")
+        
+        if not check_password():
+            st.stop()
+        
+        # Carrega configurações
+        config_data = load_config()
+        
+        # Configuração do GitHub
+        st.subheader("🔐 Configuração do GitHub")
+        
+        github_token = st.text_input(
+            "Token de Acesso ao GitHub",
+            type="password",
+            value=config_data.get('github_token', ''),
+            help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
+        )
+        
+        if st.button("💾 Salvar Configurações", type="primary"):
+            config_data['github_token'] = github_token
+            if save_config(config_data):
+                st.success("✅ Configurações salvas com sucesso!")
+                if github_token:
+                    saved_data = load_from_github(github_token)
+                    if saved_data is not None:
+                        st.session_state.data = saved_data
+                        st.success("✅ Dados carregados do GitHub com sucesso!")
+        
+        # Sincronização
+        st.subheader("🔄 Sincronização Manual")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📥 Carregar do GitHub"):
+                if github_token:
+                    saved_data = load_from_github(github_token)
+                    if saved_data is not None:
+                        st.session_state.data = saved_data
+                        st.success("✅ Dados carregados do GitHub com sucesso!")
+                    else:
+                        st.error("❌ Falha ao carregar dados do GitHub")
                 else:
-                    st.error("❌ Falha ao carregar dados do GitHub")
-            else:
-                st.error("❌ Token de acesso não configurado!")
-    
-    with col2:
-        if st.button("📤 Salvar no GitHub"):
-            if github_token:
-                if save_to_github(st.session_state.data, github_token):
-                    st.success("✅ Dados salvos no GitHub com sucesso!")
+                    st.error("❌ Token de acesso não configurado!")
+        
+        with col2:
+            if st.button("📤 Salvar no GitHub"):
+                if github_token:
+                    if save_data():
+                        st.success("✅ Dados salvos no GitHub com sucesso!")
+                    else:
+                        st.error("❌ Falha ao salvar dados no GitHub")
                 else:
-                    st.error("❌ Falha ao salvar dados no GitHub")
-            else:
-                st.error("❌ Token de acesso não configurado!")
-    
-    st.markdown("---")
-    
-    # Menu de configuração
-    st.subheader("📋 Gerenciamento de Aparelhos")
-    config_option = st.radio(
-        "Selecione a operação",
-        ["Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"]
-    )
-    
-    if config_option == "Adicionar Aparelho":
-        show_add_device_page()
-    elif config_option == "Editar Aparelho":
-        show_edit_device_page()
-    elif config_option == "Remover Aparelho":
-        show_remove_device_page()
-    elif config_option == "Realizar Manutenção":
-        show_maintenance_page()
+                    st.error("❌ Token de acesso não configurado!")
+        
+        st.markdown("---")
+        
+        # Menu de configuração
+        st.subheader("📋 Gerenciamento de Aparelhos")
+        config_option = st.radio(
+            "Selecione a operação",
+            ["Adicionar Aparelho", "Editar Aparelho", "Remover Aparelho", "Realizar Manutenção"]
+        )
+        
+        if config_option == "Adicionar Aparelho":
+            show_add_device_page()
+        elif config_option == "Editar Aparelho":
+            show_edit_device_page()
+        elif config_option == "Remover Aparelho":
+            show_remove_device_page()
+        elif config_option == "Realizar Manutenção":
+            show_maintenance_page()
+            
+    except Exception as e:
+        st.error(f"Erro na configuração: {str(e)}")
+        logger.error(f"Erro em show_configuration_page: {str(e)}")
+        logger.error(traceback.format_exc())
 
 # ============================================================
 # FUNÇÃO PRINCIPAL
@@ -734,11 +802,12 @@ def main():
         st.set_page_config(
             page_title=PAGE_TITLE,
             page_icon=PAGE_ICON,
-            layout="wide"
+            layout="wide",
+            initial_sidebar_state="expanded"
         )
         
         # Inicializar dados
-        init_data()
+        ensure_data_initialized()
         
         # Título
         st.title(f"{PAGE_ICON} PMOC - Plano de Manutenção, Operação e Controle - AKR Brands")
@@ -758,12 +827,13 @@ def main():
         # Rodapé
         st.sidebar.markdown("---")
         st.sidebar.text("Desenvolvido por Robson Vilela")
-        st.sidebar.text(f"Versão 2.0 - {datetime.now().year}")
+        st.sidebar.text(f"Versão 2.1 - {datetime.now().year}")
         
     except Exception as e:
         st.error(f"❌ Ocorreu um erro inesperado: {str(e)}")
         st.error("Por favor, contate o suporte técnico.")
         logger.error(f"Erro inesperado: {str(e)}", exc_info=True)
+        logger.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
