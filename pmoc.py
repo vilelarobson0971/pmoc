@@ -1,29 +1,16 @@
 """
 PMOC - Plano de Manutenção, Operação e Controle
 Sistema de gerenciamento de manutenção de aparelhos de ar condicionado
-Versão: 2.1
+Versão: 2.2 - Versão Simplificada
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import pytz
-from fpdf import FPDF
-import tempfile
+import json
 import os
-import requests
 import base64
 import io
-import json
-import logging
-import traceback
-
-# Configuração de logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # ============================================================
 # CONFIGURAÇÕES
@@ -31,14 +18,12 @@ logger = logging.getLogger(__name__)
 
 PAGE_TITLE = "PMOC - Plano de Manutenção, Operação e Controle - AKR Brands"
 PAGE_ICON = "❄️"
-GITHUB_REPO = "vilelarobson0971/pmoc"
-GITHUB_FILE = "pmoc.csv"
 CONFIG_FILE = "pmoc_config.json"
+DATA_FILE = "pmoc_data.csv"
 MAINTENANCE_INTERVAL_DAYS = 180
 LOCATIONS = ["Matriz", "Filial"]
 TECHNICIANS = ["Guilherme", "Ismael"]
 DEFAULT_SUPERVISOR = "Ismael"
-TIMEZONE = 'America/Sao_Paulo'
 
 # ============================================================
 # FUNÇÕES DE DADOS
@@ -52,7 +37,7 @@ def load_config():
                 return json.load(f)
         return {}
     except Exception as e:
-        logger.error(f"Erro ao carregar configurações: {str(e)}")
+        st.error(f"Erro ao carregar configurações: {str(e)}")
         return {}
 
 def save_config(config_data):
@@ -62,86 +47,34 @@ def save_config(config_data):
             json.dump(config_data, f)
         return True
     except Exception as e:
-        logger.error(f"Erro ao salvar configurações: {str(e)}")
+        st.error(f"Erro ao salvar configurações: {str(e)}")
         return False
 
-def load_from_github(token):
-    """Carrega dados do GitHub"""
-    if not token:
-        return None
-    
+def load_data():
+    """Carrega dados do arquivo CSV local"""
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 404:
-            return None
-        
-        response.raise_for_status()
-        
-        content = response.json().get("content", "")
-        if not content:
-            return None
-        
-        decoded_content = base64.b64decode(content).decode("utf-8")
-        if not decoded_content.strip():
-            return None
-        
-        df = pd.read_csv(io.StringIO(decoded_content))
-        
-        # Garantir colunas necessárias
-        required_cols = ['TAG', 'Local', 'Setor', 'Marca', 'Modelo', 'BTU', 
-                        'Data Manutenção', 'Técnico Executante', 'Aprovação Supervisor',
-                        'Próxima manutenção', 'Observações']
-        
-        for col in required_cols:
-            if col not in df.columns:
-                df[col] = ''
-        
-        return df
-        
+        if os.path.exists(DATA_FILE):
+            df = pd.read_csv(DATA_FILE)
+            # Garantir colunas necessárias
+            required_cols = ['TAG', 'Local', 'Setor', 'Marca', 'Modelo', 'BTU', 
+                           'Data Manutenção', 'Técnico Executante', 'Aprovação Supervisor',
+                           'Próxima manutenção', 'Observações']
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = ''
+            return df
+        return None
     except Exception as e:
-        logger.error(f"Erro ao carregar do GitHub: {str(e)}")
+        st.error(f"Erro ao carregar dados: {str(e)}")
         return None
 
-def save_to_github(data, token):
-    """Salva dados no GitHub"""
-    if not token:
-        return False
-    
+def save_data(df):
+    """Salva dados no arquivo CSV local"""
     try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-        
-        # Verifica se o arquivo existe
-        response = requests.get(url, headers=headers, timeout=10)
-        sha = response.json().get("sha", "") if response.status_code == 200 else ""
-        
-        # Converte DataFrame para CSV
-        csv_data = data.to_csv(index=False)
-        encoded_content = base64.b64encode(csv_data.encode("utf-8")).decode("utf-8")
-        
-        payload = {
-            "message": f"Atualização PMOC - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "content": encoded_content,
-            "sha": sha if sha else None
-        }
-        
-        response = requests.put(url, json=payload, headers=headers, timeout=15)
-        response.raise_for_status()
-        
+        df.to_csv(DATA_FILE, index=False)
         return True
-        
     except Exception as e:
-        logger.error(f"Erro ao salvar no GitHub: {str(e)}")
+        st.error(f"Erro ao salvar dados: {str(e)}")
         return False
 
 def create_initial_data():
@@ -186,160 +119,53 @@ def create_initial_data():
     return df
 
 def ensure_data_initialized():
-    """Garante que os dados estejam inicializados no session_state"""
+    """Garante que os dados estejam inicializados"""
     if 'data' not in st.session_state or st.session_state.data is None:
-        # Tenta carregar do GitHub
-        config_data = load_config()
-        token = config_data.get('github_token', '')
-        
-        if token:
-            saved_data = load_from_github(token)
-            if saved_data is not None:
-                st.session_state.data = saved_data
-                return
-    
-    # Se ainda não tem dados, cria dados iniciais
-    if 'data' not in st.session_state or st.session_state.data is None:
-        st.session_state.data = create_initial_data()
+        # Tenta carregar do arquivo
+        saved_data = load_data()
+        if saved_data is not None:
+            st.session_state.data = saved_data
+        else:
+            st.session_state.data = create_initial_data()
+            save_data(st.session_state.data)
 
-def save_data():
+def get_data():
+    """Retorna os dados atuais"""
+    ensure_data_initialized()
+    return st.session_state.data
+
+def save_current_data():
     """Salva os dados atuais"""
     try:
-        if 'data' not in st.session_state or st.session_state.data is None:
-            st.error("Não há dados para salvar")
-            return False
-            
-        config_data = load_config()
-        token = config_data.get('github_token', '')
-        
-        if not token:
-            st.error("Token de acesso ao GitHub não configurado")
-            return False
-        
-        if save_to_github(st.session_state.data, token):
-            return True
-        else:
-            st.error("Falha ao salvar dados no GitHub.")
-            return False
-            
+        if 'data' in st.session_state and st.session_state.data is not None:
+            return save_data(st.session_state.data)
+        return False
     except Exception as e:
-        logger.error(f"Erro ao salvar dados: {str(e)}")
         st.error(f"Erro ao salvar: {str(e)}")
         return False
 
 # ============================================================
-# GERADOR DE RELATÓRIOS PDF
+# FUNÇÕES DE EXPORTAÇÃO
 # ============================================================
 
-def generate_pdf_report(data, title="Relatório de Aparelhos"):
-    """Gera relatório PDF dos aparelhos"""
+def export_to_csv(df):
+    """Exporta dados para CSV"""
     try:
-        if data is None or data.empty:
-            st.warning("Não há dados para gerar o relatório")
-            return None
-        
-        pdf = FPDF(orientation='L')
-        pdf.add_page()
-        
-        # Configuração de fonte
-        pdf.set_font("Arial", size=9)
-        pdf.set_text_color(0, 0, 0)
-        
-        # Fuso horário
-        tz = pytz.timezone(TIMEZONE)
-        now = datetime.now(tz)
-        
-        # Cabeçalho
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, PAGE_TITLE, 0, 1, 'C')
-        pdf.ln(5)
-        
-        # Título do relatório
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, title, 0, 1, 'C')
-        pdf.ln(5)
-        
-        # Data e hora
-        pdf.set_font("Arial", 'I', 9)
-        pdf.cell(0, 10, f"Gerado em: {now.strftime('%d/%m/%Y %H:%M')}", 0, 1, 'R')
-        pdf.ln(8)
-        
-        # Configuração das colunas
-        col_widths = [12, 20, 30, 20, 25, 12, 25, 25, 25, 25, 40]
-        headers = ["TAG", "Local", "Setor", "Marca", "Modelo", 
-                  "BTU", "Última Manut.", "Próx. Manut.", 
-                  "Técnico", "Aprovação", "Observações"]
-        
-        # Cabeçalho da tabela
-        pdf.set_font("Arial", 'B', 8)
-        for i, header in enumerate(headers):
-            pdf.cell(col_widths[i], 8, header, 1, 0, 'C')
-        pdf.ln()
-        
-        # Conteúdo da tabela
-        pdf.set_font("Arial", size=7)
-        for _, row in data.iterrows():
-            cells = [
-                str(row['TAG'])[:10] if pd.notna(row['TAG']) else '',
-                str(row['Local'])[:18] if pd.notna(row['Local']) else '',
-                str(row['Setor'])[:25] if pd.notna(row['Setor']) else '',
-                str(row['Marca'])[:18] if pd.notna(row['Marca']) else '',
-                str(row['Modelo'])[:22] if pd.notna(row['Modelo']) else '',
-                str(row['BTU'])[:10] if pd.notna(row['BTU']) else '',
-                str(row['Data Manutenção'])[:10] if pd.notna(row['Data Manutenção']) and str(row['Data Manutenção']) != '' else 'N/A',
-                str(row['Próxima manutenção'])[:10] if pd.notna(row['Próxima manutenção']) and str(row['Próxima manutenção']) != '' else 'N/A',
-                str(row['Técnico Executante'])[:22] if pd.notna(row['Técnico Executante']) else '',
-                str(row['Aprovação Supervisor'])[:22] if pd.notna(row['Aprovação Supervisor']) else '',
-                str(row['Observações'])[:60] if pd.notna(row['Observações']) and str(row['Observações']) != '' else 'Nenhuma'
-            ]
-            
-            for i, cell in enumerate(cells):
-                pdf.cell(col_widths[i], 6, cell, 1, 0, 'C' if i in [0, 5, 6, 7] else 'L')
-            pdf.ln()
-        
-        # Estatísticas
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, "Estatísticas:", 0, 1)
-        pdf.set_font("Arial", size=10)
-        
-        total = len(data)
-        pdf.cell(0, 10, f"Total de Aparelhos: {total}", 0, 1)
-        
-        try:
-            with_maintenance = len(data[data['Data Manutenção'].notna() & (data['Data Manutenção'] != '')])
-            pdf.cell(0, 10, f"Com manutenção registrada: {with_maintenance}", 0, 1)
-            
-            overdue_count = 0
-            for _, row in data.iterrows():
-                next_date = row.get('Próxima manutenção', '')
-                if next_date and str(next_date) != '':
-                    try:
-                        date_obj = datetime.strptime(str(next_date), '%d/%m/%Y')
-                        if date_obj < datetime.now():
-                            overdue_count += 1
-                    except ValueError:
-                        pass
-            
-            pdf.cell(0, 10, f"Manutenções atrasadas: {overdue_count}", 0, 1)
-        except Exception as e:
-            pdf.cell(0, 10, "Erro ao calcular estatísticas", 0, 1)
-        
-        # Rodapé
-        pdf.ln(15)
-        pdf.set_font("Arial", 'I', 8)
-        pdf.cell(0, 10, "Sistema PMOC - AKR Brands", 0, 0, 'C')
-        
-        # Gera o arquivo
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        pdf.output(temp_file.name)
-        
-        return temp_file.name
-        
+        csv = df.to_csv(index=False)
+        b64 = base64.b64encode(csv.encode()).decode()
+        href = f'<a href="data:file/csv;base64,{b64}" download="pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv">Baixar CSV</a>'
+        return href
     except Exception as e:
-        logger.error(f"Erro ao gerar PDF: {str(e)}")
-        logger.error(traceback.format_exc())
-        st.error(f"Erro ao gerar PDF: {str(e)}")
+        st.error(f"Erro ao exportar CSV: {str(e)}")
+        return None
+
+def export_to_html(df):
+    """Exporta dados para HTML (tabela para impressão)"""
+    try:
+        html = df.to_html(index=False, classes='table table-striped')
+        return html
+    except Exception as e:
+        st.error(f"Erro ao exportar HTML: {str(e)}")
         return None
 
 # ============================================================
@@ -351,24 +177,23 @@ def show_consultation_page():
     try:
         st.header("📊 Consulta de Aparelhos")
         
-        # Garantir que os dados existem
-        ensure_data_initialized()
+        df = get_data()
         
-        if st.session_state.data is None or st.session_state.data.empty:
-            st.warning("Nenhum dado disponível. Adicione aparelhos ou carregue do GitHub.")
+        if df is None or df.empty:
+            st.warning("Nenhum dado disponível. Adicione aparelhos ou carregue do arquivo.")
             return
         
         # Filtros
         col1, col2, col3 = st.columns(3)
         with col1:
-            local_filter = st.selectbox("Local", ["Todos"] + list(st.session_state.data['Local'].unique()))
+            local_filter = st.selectbox("Local", ["Todos"] + list(df['Local'].unique()))
         with col2:
-            setor_filter = st.selectbox("Setor", ["Todos"] + list(st.session_state.data['Setor'].unique()))
+            setor_filter = st.selectbox("Setor", ["Todos"] + list(df['Setor'].unique()))
         with col3:
-            marca_filter = st.selectbox("Marca", ["Todos"] + list(st.session_state.data['Marca'].unique()))
+            marca_filter = st.selectbox("Marca", ["Todos"] + list(df['Marca'].unique()))
         
         # Aplicar filtros
-        filtered_data = st.session_state.data.copy()
+        filtered_data = df.copy()
         if local_filter != "Todos":
             filtered_data = filtered_data[filtered_data['Local'] == local_filter]
         if setor_filter != "Todos":
@@ -391,39 +216,6 @@ def show_consultation_page():
         
         display_data['Próxima manutenção (calculada)'] = display_data.apply(calculate_next_maintenance, axis=1)
         
-        # Gerar relatório
-        st.subheader("📄 Gerar Relatório")
-        selected_tags = st.multiselect(
-            "Selecione os aparelhos para incluir no relatório (deixe vazio para todos)",
-            options=filtered_data['TAG'].unique()
-        )
-        
-        if st.button("Gerar Relatório PDF", type="primary"):
-            with st.spinner("Gerando relatório PDF..."):
-                if selected_tags:
-                    report_data = filtered_data[filtered_data['TAG'].isin(selected_tags)]
-                    title = f"Relatório de Aparelhos Selecionados ({len(report_data)} itens)"
-                else:
-                    report_data = filtered_data
-                    title = f"Relatório Completo de Aparelhos ({len(report_data)} itens)"
-                
-                pdf_file = generate_pdf_report(report_data, title)
-                
-                if pdf_file:
-                    try:
-                        with open(pdf_file, "rb") as f:
-                            pdf_bytes = f.read()
-                        
-                        st.download_button(
-                            label="📥 Baixar Relatório PDF",
-                            data=pdf_bytes,
-                            file_name=f"relatorio_pmoc_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                            mime="application/pdf"
-                        )
-                    finally:
-                        if os.path.exists(pdf_file):
-                            os.unlink(pdf_file)
-        
         # Exibir dados
         columns_to_show = [
             "TAG", "Local", "Setor", "Marca", "Modelo", 
@@ -437,13 +229,16 @@ def show_consultation_page():
             hide_index=True
         )
         
-        # Exportar CSV
-        st.download_button(
-            label="📥 Exportar para CSV",
-            data=st.session_state.data.to_csv(index=False).encode('utf-8'),
-            file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
-            mime='text/csv'
-        )
+        # Botões de exportação
+        col1, col2 = st.columns(2)
+        with col1:
+            csv_data = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Exportar para CSV",
+                data=csv_data,
+                file_name=f'pmoc_export_{datetime.now().strftime("%Y%m%d")}.csv',
+                mime='text/csv'
+            )
         
         # Estatísticas
         st.subheader("📈 Estatísticas")
@@ -466,20 +261,17 @@ def show_consultation_page():
                             pass
                 st.metric("Manutenções Atrasadas", overdue_count)
             except Exception as e:
-                st.error(f"Erro ao calcular atrasos: {str(e)}")
                 st.metric("Manutenções Atrasadas", 0)
                 
     except Exception as e:
         st.error(f"Erro ao carregar consulta: {str(e)}")
-        logger.error(f"Erro em show_consultation_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 def show_add_device_page():
     """Página para adicionar aparelho"""
     try:
         st.header("➕ Adicionar Novo Aparelho")
         
-        ensure_data_initialized()
+        df = get_data()
         
         with st.form("add_form"):
             col1, col2 = st.columns(2)
@@ -496,7 +288,7 @@ def show_add_device_page():
             submitted = st.form_submit_button("Adicionar Aparelho", type="primary")
             
             if submitted:
-                if st.session_state.data is not None and tag in st.session_state.data['TAG'].values:
+                if df is not None and tag in df['TAG'].values:
                     st.error("❌ Já existe um aparelho com esta TAG!")
                 elif not setor or not marca:
                     st.error("❌ Preencha todos os campos obrigatórios!")
@@ -515,39 +307,37 @@ def show_add_device_page():
                         'Observações': ''
                     }
                     
-                    if st.session_state.data is None:
+                    if df is None:
                         st.session_state.data = pd.DataFrame([new_row])
                     else:
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                        st.session_state.data = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                     
-                    if save_data():
+                    if save_current_data():
                         st.success(f"✅ Aparelho TAG {tag} adicionado com sucesso!")
                         st.balloons()
                         st.rerun()
                     
     except Exception as e:
         st.error(f"Erro ao adicionar aparelho: {str(e)}")
-        logger.error(f"Erro em show_add_device_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 def show_edit_device_page():
     """Página para editar aparelho"""
     try:
         st.header("✏️ Editar Aparelho")
         
-        ensure_data_initialized()
+        df = get_data()
         
-        if st.session_state.data is None or st.session_state.data.empty:
+        if df is None or df.empty:
             st.warning("Não há aparelhos cadastrados para editar")
             return
         
         tag_to_edit = st.selectbox(
             "Selecione a TAG do aparelho a editar",
-            st.session_state.data['TAG'].unique()
+            df['TAG'].unique()
         )
         
         if tag_to_edit:
-            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_edit].iloc[0]
+            row = df[df['TAG'] == tag_to_edit].iloc[0]
             
             with st.form("edit_form"):
                 col1, col2 = st.columns(2)
@@ -575,33 +365,31 @@ def show_edit_device_page():
                         st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'Modelo'] = modelo
                         st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_edit, 'BTU'] = str(btu)
                         
-                        if save_data():
+                        if save_current_data():
                             st.success(f"✅ Aparelho TAG {tag} atualizado com sucesso!")
                             st.rerun()
                             
     except Exception as e:
         st.error(f"Erro ao editar aparelho: {str(e)}")
-        logger.error(f"Erro em show_edit_device_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 def show_remove_device_page():
     """Página para remover aparelho"""
     try:
         st.header("🗑️ Remover Aparelho")
         
-        ensure_data_initialized()
+        df = get_data()
         
-        if st.session_state.data is None or st.session_state.data.empty:
+        if df is None or df.empty:
             st.warning("Não há aparelhos cadastrados para remover")
             return
         
         tag_to_remove = st.selectbox(
             "Selecione a TAG do aparelho a remover",
-            st.session_state.data['TAG'].unique()
+            df['TAG'].unique()
         )
         
         if tag_to_remove:
-            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_remove].iloc[0]
+            row = df[df['TAG'] == tag_to_remove].iloc[0]
             
             st.warning(f"⚠️ Você está prestes a remover permanentemente o aparelho:")
             st.write(f"**TAG:** {tag_to_remove}")
@@ -612,8 +400,8 @@ def show_remove_device_page():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ Confirmar Remoção", type="primary"):
-                    st.session_state.data = st.session_state.data[st.session_state.data['TAG'] != tag_to_remove]
-                    if save_data():
+                    st.session_state.data = df[df['TAG'] != tag_to_remove]
+                    if save_current_data():
                         st.success(f"✅ Aparelho TAG {tag_to_remove} removido com sucesso!")
                         st.rerun()
             with col2:
@@ -622,41 +410,37 @@ def show_remove_device_page():
                     
     except Exception as e:
         st.error(f"Erro ao remover aparelho: {str(e)}")
-        logger.error(f"Erro em show_remove_device_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 def show_maintenance_page():
     """Página para registrar manutenção"""
     try:
         st.header("🔧 Registrar Manutenção")
         
-        ensure_data_initialized()
+        df = get_data()
         
-        if st.session_state.data is None or st.session_state.data.empty:
+        if df is None or df.empty:
             st.warning("Não há aparelhos cadastrados para registrar manutenção")
             return
         
         tag_to_maintain = st.selectbox(
             "Selecione a TAG do aparelho para registrar manutenção",
-            st.session_state.data['TAG'].unique()
+            df['TAG'].unique()
         )
         
         if tag_to_maintain:
-            row = st.session_state.data[st.session_state.data['TAG'] == tag_to_maintain].iloc[0]
+            row = df[df['TAG'] == tag_to_maintain].iloc[0]
             
             st.write(f"**Aparelho selecionado:** TAG {tag_to_maintain} - {row['Marca']} {row['Modelo']}")
             st.write(f"**Localização:** {row['Local']} - {row['Setor']}")
             
             with st.form("maintenance_form"):
                 maintenance_date = st.date_input(
-                    "Data da Manutenção*",
-                    format="DD/MM/YYYY"
+                    "Data da Manutenção*"
                 )
                 
                 technician = st.selectbox(
                     "Técnico Executante*",
-                    TECHNICIANS,
-                    index=0
+                    TECHNICIANS
                 )
                 
                 supervisor = st.text_input("Aprovação Supervisor", value=DEFAULT_SUPERVISOR)
@@ -681,7 +465,7 @@ def show_maintenance_page():
                         st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Próxima manutenção'] = next_maintenance.strftime('%d/%m/%Y')
                         st.session_state.data.loc[st.session_state.data['TAG'] == tag_to_maintain, 'Observações'] = observations
                         
-                        if save_data():
+                        if save_current_data():
                             st.success(f"✅ Manutenção para TAG {tag_to_maintain} registrada com sucesso!")
                             st.info(f"📅 Próxima manutenção: {next_maintenance.strftime('%d/%m/%Y')}")
                             st.balloons()
@@ -689,8 +473,6 @@ def show_maintenance_page():
                             
     except Exception as e:
         st.error(f"Erro ao registrar manutenção: {str(e)}")
-        logger.error(f"Erro em show_maintenance_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 def check_password():
     """Verifica a senha de acesso"""
@@ -708,7 +490,6 @@ def check_password():
             return False
         return True
     except Exception as e:
-        logger.error(f"Erro em check_password: {str(e)}")
         return False
 
 def show_configuration_page():
@@ -722,51 +503,40 @@ def show_configuration_page():
         # Carrega configurações
         config_data = load_config()
         
-        # Configuração do GitHub
-        st.subheader("🔐 Configuração do GitHub")
+        # Configuração
+        st.subheader("📁 Configuração de Dados")
         
-        github_token = st.text_input(
-            "Token de Acesso ao GitHub",
-            type="password",
-            value=config_data.get('github_token', ''),
-            help="Obtenha em: GitHub > Settings > Developer Settings > Personal Access Tokens"
-        )
+        # Mostrar status dos dados
+        df = get_data()
+        if df is not None:
+            st.success(f"✅ Dados carregados: {len(df)} aparelhos")
+        else:
+            st.warning("⚠️ Nenhum dado carregado")
         
-        if st.button("💾 Salvar Configurações", type="primary"):
-            config_data['github_token'] = github_token
-            if save_config(config_data):
-                st.success("✅ Configurações salvas com sucesso!")
-                if github_token:
-                    saved_data = load_from_github(github_token)
-                    if saved_data is not None:
-                        st.session_state.data = saved_data
-                        st.success("✅ Dados carregados do GitHub com sucesso!")
-        
-        # Sincronização
-        st.subheader("🔄 Sincronização Manual")
-        col1, col2 = st.columns(2)
-        
+        # Botões de gerenciamento
+        col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("📥 Carregar do GitHub"):
-                if github_token:
-                    saved_data = load_from_github(github_token)
-                    if saved_data is not None:
-                        st.session_state.data = saved_data
-                        st.success("✅ Dados carregados do GitHub com sucesso!")
-                    else:
-                        st.error("❌ Falha ao carregar dados do GitHub")
-                else:
-                    st.error("❌ Token de acesso não configurado!")
+            if st.button("💾 Salvar Dados"):
+                if save_current_data():
+                    st.success("✅ Dados salvos com sucesso!")
         
         with col2:
-            if st.button("📤 Salvar no GitHub"):
-                if github_token:
-                    if save_data():
-                        st.success("✅ Dados salvos no GitHub com sucesso!")
-                    else:
-                        st.error("❌ Falha ao salvar dados no GitHub")
+            if st.button("🔄 Recarregar Dados"):
+                saved_data = load_data()
+                if saved_data is not None:
+                    st.session_state.data = saved_data
+                    st.success("✅ Dados recarregados com sucesso!")
+                    st.rerun()
                 else:
-                    st.error("❌ Token de acesso não configurado!")
+                    st.warning("⚠️ Nenhum dado salvo encontrado")
+        
+        with col3:
+            if st.button("📊 Resetar Dados"):
+                if st.checkbox("Confirmar reset dos dados?"):
+                    st.session_state.data = create_initial_data()
+                    save_current_data()
+                    st.success("✅ Dados resetados com sucesso!")
+                    st.rerun()
         
         st.markdown("---")
         
@@ -788,8 +558,6 @@ def show_configuration_page():
             
     except Exception as e:
         st.error(f"Erro na configuração: {str(e)}")
-        logger.error(f"Erro em show_configuration_page: {str(e)}")
-        logger.error(traceback.format_exc())
 
 # ============================================================
 # FUNÇÃO PRINCIPAL
@@ -827,13 +595,10 @@ def main():
         # Rodapé
         st.sidebar.markdown("---")
         st.sidebar.text("Desenvolvido por Robson Vilela")
-        st.sidebar.text(f"Versão 2.1 - {datetime.now().year}")
+        st.sidebar.text(f"Versão 2.2 - {datetime.now().year}")
         
     except Exception as e:
         st.error(f"❌ Ocorreu um erro inesperado: {str(e)}")
-        st.error("Por favor, contate o suporte técnico.")
-        logger.error(f"Erro inesperado: {str(e)}", exc_info=True)
-        logger.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
